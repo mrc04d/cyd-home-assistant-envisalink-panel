@@ -71,23 +71,59 @@ First, verify your CYD is working with this basic test config:
 
 ```yaml
 esphome:
-  name: cyd-test
+  name: cyd-display-test
 
 esp32:
   board: esp32dev
   framework:
-    type: arduino
+    type: esp-idf
 
 logger:
 
 api:
+  reboot_timeout: 0s
 
 ota:
   - platform: esphome
 
+# =============================================================================
+# WiFi Configuration
+# =============================================================================
+# Option 1: Use the captive portal (default)
+#   - On first boot, the device creates a WiFi access point
+#   - Connect to "CYD-Alarm Setup" with password "configme123"
+#   - A portal will open to configure your WiFi credentials
+#
+# Option 2: Hardcode your WiFi credentials
+#   - Uncomment the ssid/password lines below
+#   - Add your credentials to secrets.yaml (ESPHome Dashboard → Secrets):
+#       wifi_ssid: "Your_WiFi_Name"
+#       wifi_password: "Your_WiFi_Password"
+#   - Or replace !secret references with your actual credentials
+#
+# Option 3: Static IP (optional, use with Option 2)
+#   - Uncomment the manual_ip section below
+# =============================================================================
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  # Uncomment below to hardcode WiFi credentials
+  # ssid: !secret wifi_ssid
+  # password: !secret wifi_password
+  
+  # Optional: Uncomment below for static IP
+  # manual_ip:
+  #   static_ip: 192.168.1.70
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  #   dns1: 192.168.1.1
+  
+  # Fallback/Setup AP - connects to this if no WiFi configured or connection fails
+  ap:
+    ssid: "CYD-Alarm Setup"
+    password: "configme123"
+  
+  reboot_timeout: 0s
+
+captive_portal:
 
 output:
   - platform: ledc
@@ -115,18 +151,12 @@ display:
     dc_pin: GPIO2
     auto_clear_enabled: true
     invert_colors: false
+    color_palette: 8BIT
+    show_test_card: true
     rotation: 0
     dimensions:
       width: 320
       height: 240
-    lambda: |-
-      it.fill(Color(0, 0, 255));
-      it.print(160, 120, id(font1), Color(255, 255, 255), TextAlign::CENTER, "CYD TEST");
-
-font:
-  - file: "gfonts://Roboto"
-    id: font1
-    size: 24
 ```
 
 If you see a blue screen with "CYD TEST" text, proceed to the next step.
@@ -137,23 +167,59 @@ Add touchscreen support and calibrate:
 
 ```yaml
 esphome:
-  name: cyd-calibration
+  name: cyd-alarm
 
 esp32:
   board: esp32dev
   framework:
-    type: arduino
+    type: esp-idf
 
 logger:
 
 api:
+  reboot_timeout: 0s
 
 ota:
   - platform: esphome
 
+# =============================================================================
+# WiFi Configuration
+# =============================================================================
+# Option 1: Use the captive portal (default)
+#   - On first boot, the device creates a WiFi access point
+#   - Connect to "CYD-Alarm Setup" with password "configme123"
+#   - A portal will open to configure your WiFi credentials
+#
+# Option 2: Hardcode your WiFi credentials
+#   - Uncomment the ssid/password lines below
+#   - Add your credentials to secrets.yaml (ESPHome Dashboard → Secrets):
+#       wifi_ssid: "Your_WiFi_Name"
+#       wifi_password: "Your_WiFi_Password"
+#   - Or replace !secret references with your actual credentials
+#
+# Option 3: Static IP (optional, use with Option 2)
+#   - Uncomment the manual_ip section below
+# =============================================================================
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  # Uncomment below to hardcode WiFi credentials
+  # ssid: !secret wifi_ssid
+  # password: !secret wifi_password
+  
+  # Optional: Uncomment below for static IP
+  # manual_ip:
+  #   static_ip: 192.168.1.70
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  #   dns1: 192.168.1.1
+  
+  # Fallback/Setup AP - connects to this if no WiFi configured or connection fails
+  ap:
+    ssid: "CYD-Alarm Setup"
+    password: "configme123"
+  
+  reboot_timeout: 0s
+
+captive_portal:
 
 output:
   - platform: ledc
@@ -187,13 +253,14 @@ display:
     dc_pin: GPIO2
     auto_clear_enabled: true
     invert_colors: false
+    color_palette: 8BIT
     rotation: 0
     dimensions:
       width: 320
       height: 240
     lambda: |-
-      it.fill(Color(0, 0, 0));
-      it.print(160, 120, id(font1), Color(255, 255, 255), TextAlign::CENTER, "Touch corners to calibrate");
+      it.fill(Color(32, 32, 32));
+      it.print(160, 120, id(roboto), Color(255, 255, 255), TextAlign::CENTER, "TOUCH TEST");
 
 touchscreen:
   - platform: xpt2046
@@ -201,22 +268,28 @@ touchscreen:
     spi_id: touch
     cs_pin: GPIO33
     interrupt_pin: GPIO36
+    calibration:
+      x_min: 280
+      x_max: 3860
+      y_min: 340
+      y_max: 3860
     on_touch:
-      - logger.log:
-          format: "Touch at (%d, %d)"
-          args: [touch.x, touch.y]
+      - logger.log: "Touch detected!"
+      - light.turn_on:
+          id: backlight
+          brightness: 1.0
 
 font:
   - file: "gfonts://Roboto"
-    id: font1
-    size: 20
+    id: roboto
+    size: 24
 ```
 
 Touch each corner of the screen and note the values in the ESPHome logs. Use these values to set your calibration.
 
 ### Step 3: Install Alarm Panel
 
-1. Copy `alarm-panel.yaml` to your ESPHome config folder
+1. Install `cyd-alarm-panel.yaml` to your ESP device using the the web or other supported method
 
 2. Edit the substitutions at the top:
 
@@ -224,17 +297,21 @@ Touch each corner of the screen and note the values in the ESPHome logs. Use the
 substitutions:
   device_name: cyd-alarm
   friendly_name: "CYD Alarm Panel"
-  # Change to your alarm entity (Envisalink partition 1 shown)
+  # Change this to your alarm entity ID
   alarm_entity: "alarm_control_panel.home_alarm_partition_1"
-  # Grace period for cancel without PIN (milliseconds)
+  # Grace period in milliseconds (10 seconds = 10000)
   grace_period_ms: "10000"
-  # Your timezone
+  # Change this to your timezone - examples:
+  # Australia/Sydney, America/New_York, Europe/London, Asia/Tokyo
+  # Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
   timezone: "Australia/Sydney"
 ```
 
-3. Flash to your CYD via USB for initial install
+3. Configure your WIFI credentials using which ever method you prefer
+   
+4. Flash to your CYD via USB for initial install
 
-4. Future updates can be done OTA
+5. Future updates can be done OTA
 
 ### Step 4: Enable Home Assistant Actions
 
