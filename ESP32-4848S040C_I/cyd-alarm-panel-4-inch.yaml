@@ -1,0 +1,1022 @@
+substitutions:
+  device_name: esp32-4848s040-panel
+  friendly_name: "4inch Smart Panel"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  platformio_options:
+    board_build.flash_mode: dio
+    board_build.f_flash: 80000000L
+  on_boot:
+    priority: 600
+    then:
+      - light.turn_on:
+          id: display_backlight
+          brightness: 100%
+      - delay: 1s
+      - lvgl.page.show: main_page
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    version: recommended
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
+      CONFIG_SPIRAM_RODATA: "y"
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  level: INFO
+  logs:
+    component: ERROR
+
+api:
+  encryption:
+    key: "YOUR_API_KEY_HERE"
+
+ota:
+  - platform: esphome
+    password: "YOUR_OTA_PASSWORD_HERE"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  fast_connect: true
+  ap:
+    ssid: "${device_name} Fallback"
+    password: "fallback123"
+
+captive_portal:
+
+# I2C bus for touch controller
+i2c:
+  - id: bus_a
+    sda: GPIO19
+    scl: GPIO45
+    scan: true
+    frequency: 400kHz
+
+# SPI bus (if needed for SD card or other peripherals)
+spi:
+  clk_pin: GPIO48
+  mosi_pin: GPIO47
+
+# Backlight PWM control
+output:
+  - platform: ledc
+    pin: GPIO38
+    id: backlight_pwm
+    frequency: 1220Hz
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "${friendly_name} Backlight"
+    id: display_backlight
+    restore_mode: ALWAYS_ON
+    default_transition_length: 250ms
+    gamma_correct: 2.8
+
+# Touch controller - GT911
+touchscreen:
+  - platform: gt911
+    id: touch_screen
+    interrupt_pin: GPIO4
+    i2c_id: bus_a
+
+# Display - QSPI for this board
+display:
+  - platform: qspi_amoled
+    model: T4-S3
+    id: main_display
+    dimensions:
+      width: 480
+      height: 480
+    color_order: rgb
+    brightness: 255
+    cs_pin: GPIO6
+    reset_pin: GPIO5
+    enable_pin: GPIO7
+    update_interval: never
+    auto_clear_enabled: false
+
+# LVGL Configuration
+lvgl:
+  displays:
+    - main_display
+  touchscreens:
+    - touch_screen
+  buffer_size: 25%
+  log_level: WARN
+  color_depth: 16
+  bg_color: 0x1a1a2e
+  text_font: roboto_20
+  theme:
+    btn:
+      bg_color: 0x3d5a80
+      bg_grad_color: 0x293241
+      bg_grad_dir: VER
+      radius: 10
+      shadow_width: 8
+      shadow_ofs_y: 4
+      shadow_color: 0x000000
+      text_color: 0xffffff
+      pressed:
+        bg_color: 0x2a9d8f
+    label:
+      text_color: 0xffffff
+  pages:
+    # ===== MAIN PAGE =====
+    - id: main_page
+      widgets:
+        # Header bar
+        - obj:
+            width: 480
+            height: 50
+            x: 0
+            y: 0
+            bg_color: 0x16213e
+            radius: 0
+            pad_all: 0
+            widgets:
+              - label:
+                  id: header_time
+                  x: 20
+                  y: 12
+                  text_font: roboto_24
+                  text: "00:00"
+              - label:
+                  id: header_date
+                  x: 200
+                  y: 15
+                  text_font: roboto_16
+                  text: "Loading..."
+              - label:
+                  id: wifi_icon
+                  x: 440
+                  y: 12
+                  text_font: material_24
+                  text: "\U000F05A9"
+
+        # Status card
+        - obj:
+            width: 440
+            height: 100
+            x: 20
+            y: 70
+            bg_color: 0x0f3460
+            radius: 15
+            pad_all: 15
+            widgets:
+              - label:
+                  text: "System Status"
+                  text_font: roboto_16
+                  text_color: 0x94a3b8
+              - label:
+                  id: status_label
+                  y: 35
+                  text_font: roboto_24
+                  text: "Ready"
+                  text_color: 0x2ecc71
+
+        # Button row 1
+        - btn:
+            id: btn_lights
+            width: 135
+            height: 100
+            x: 20
+            y: 190
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: material_36
+                  text: "\U000F0335"
+              - label:
+                  align: BOTTOM_MID
+                  y: -10
+                  text: "Lights"
+            on_click:
+              then:
+                - logger.log: "Lights button pressed"
+                - homeassistant.service:
+                    service: light.toggle
+                    data:
+                      entity_id: light.living_room
+
+        - btn:
+            id: btn_climate
+            width: 135
+            height: 100
+            x: 172
+            y: 190
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: material_36
+                  text: "\U000F0238"
+              - label:
+                  align: BOTTOM_MID
+                  y: -10
+                  text: "Climate"
+            on_click:
+              then:
+                - lvgl.page.show: climate_page
+
+        - btn:
+            id: btn_security
+            width: 135
+            height: 100
+            x: 325
+            y: 190
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: material_36
+                  text: "\U000F099D"
+              - label:
+                  align: BOTTOM_MID
+                  y: -10
+                  text: "Security"
+            on_click:
+              then:
+                - lvgl.page.show: security_page
+
+        # Button row 2
+        - btn:
+            id: btn_music
+            width: 135
+            height: 100
+            x: 20
+            y: 310
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: material_36
+                  text: "\U000F075A"
+              - label:
+                  align: BOTTOM_MID
+                  y: -10
+                  text: "Music"
+            on_click:
+              then:
+                - logger.log: "Music button pressed"
+
+        - btn:
+            id: btn_cameras
+            width: 135
+            height: 100
+            x: 172
+            y: 310
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: material_36
+                  text: "\U000F0D5D"
+              - label:
+                  align: BOTTOM_MID
+                  y: -10
+                  text: "Cameras"
+            on_click:
+              then:
+                - logger.log: "Cameras button pressed"
+
+        - btn:
+            id: btn_settings
+            width: 135
+            height: 100
+            x: 325
+            y: 310
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: material_36
+                  text: "\U000F0493"
+              - label:
+                  align: BOTTOM_MID
+                  y: -10
+                  text: "Settings"
+            on_click:
+              then:
+                - lvgl.page.show: settings_page
+
+        # Footer with sensor info
+        - obj:
+            width: 440
+            height: 50
+            x: 20
+            y: 420
+            bg_color: 0x0f3460
+            radius: 10
+            widgets:
+              - label:
+                  id: footer_temp
+                  x: 30
+                  y: 15
+                  text_font: roboto_16
+                  text: "-- °F"
+              - label:
+                  id: footer_humidity
+                  x: 150
+                  y: 15
+                  text_font: roboto_16
+                  text: "-- %"
+              - label:
+                  id: footer_ip
+                  x: 280
+                  y: 15
+                  text_font: roboto_14
+                  text_color: 0x94a3b8
+                  text: "0.0.0.0"
+
+    # ===== CLIMATE PAGE =====
+    - id: climate_page
+      widgets:
+        - obj:
+            width: 480
+            height: 50
+            bg_color: 0x16213e
+            radius: 0
+            widgets:
+              - btn:
+                  width: 50
+                  height: 40
+                  x: 5
+                  y: 5
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: material_24
+                        text: "\U000F004D"
+                  on_click:
+                    then:
+                      - lvgl.page.show: main_page
+              - label:
+                  x: 70
+                  y: 12
+                  text_font: roboto_24
+                  text: "Climate Control"
+
+        # Current temperature display
+        - obj:
+            width: 200
+            height: 200
+            x: 140
+            y: 80
+            bg_color: 0x0f3460
+            radius: 100
+            widgets:
+              - label:
+                  id: climate_current_temp
+                  align: CENTER
+                  text_font: roboto_48
+                  text: "72°"
+              - label:
+                  align: CENTER
+                  y: 45
+                  text_font: roboto_16
+                  text_color: 0x94a3b8
+                  text: "Current"
+
+        # Temperature controls
+        - btn:
+            id: btn_temp_up
+            width: 100
+            height: 60
+            x: 100
+            y: 310
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: material_36
+                  text: "\U000F005D"
+            on_click:
+              then:
+                - homeassistant.service:
+                    service: climate.set_temperature
+                    data:
+                      entity_id: climate.thermostat
+                      temperature: "{{ state_attr('climate.thermostat', 'temperature') + 1 }}"
+
+        - label:
+            id: climate_setpoint
+            x: 220
+            y: 320
+            width: 60
+            text_font: roboto_36
+            text_align: CENTER
+            text: "72"
+
+        - btn:
+            id: btn_temp_down
+            width: 100
+            height: 60
+            x: 280
+            y: 310
+            widgets:
+              - label:
+                  align: CENTER
+                  text_font: material_36
+                  text: "\U000F0046"
+            on_click:
+              then:
+                - homeassistant.service:
+                    service: climate.set_temperature
+                    data:
+                      entity_id: climate.thermostat
+                      temperature: "{{ state_attr('climate.thermostat', 'temperature') - 1 }}"
+
+        # Mode buttons
+        - btn:
+            width: 100
+            height: 50
+            x: 40
+            y: 400
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Heat"
+            on_click:
+              then:
+                - homeassistant.service:
+                    service: climate.set_hvac_mode
+                    data:
+                      entity_id: climate.thermostat
+                      hvac_mode: heat
+
+        - btn:
+            width: 100
+            height: 50
+            x: 155
+            y: 400
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Cool"
+            on_click:
+              then:
+                - homeassistant.service:
+                    service: climate.set_hvac_mode
+                    data:
+                      entity_id: climate.thermostat
+                      hvac_mode: cool
+
+        - btn:
+            width: 100
+            height: 50
+            x: 270
+            y: 400
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Auto"
+            on_click:
+              then:
+                - homeassistant.service:
+                    service: climate.set_hvac_mode
+                    data:
+                      entity_id: climate.thermostat
+                      hvac_mode: auto
+
+        - btn:
+            width: 80
+            height: 50
+            x: 385
+            y: 400
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Off"
+            on_click:
+              then:
+                - homeassistant.service:
+                    service: climate.set_hvac_mode
+                    data:
+                      entity_id: climate.thermostat
+                      hvac_mode: off
+
+    # ===== SECURITY PAGE =====
+    - id: security_page
+      widgets:
+        - obj:
+            width: 480
+            height: 50
+            bg_color: 0x16213e
+            radius: 0
+            widgets:
+              - btn:
+                  width: 50
+                  height: 40
+                  x: 5
+                  y: 5
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: material_24
+                        text: "\U000F004D"
+                  on_click:
+                    then:
+                      - lvgl.page.show: main_page
+              - label:
+                  x: 70
+                  y: 12
+                  text_font: roboto_24
+                  text: "Security Panel"
+
+        # Alarm status
+        - obj:
+            width: 440
+            height: 120
+            x: 20
+            y: 70
+            bg_color: 0x0f3460
+            radius: 15
+            widgets:
+              - label:
+                  id: alarm_status_icon
+                  x: 30
+                  y: 35
+                  text_font: material_48
+                  text: "\U000F099D"
+              - label:
+                  id: alarm_status_text
+                  x: 120
+                  y: 25
+                  text_font: roboto_24
+                  text: "Disarmed"
+              - label:
+                  id: alarm_status_detail
+                  x: 120
+                  y: 60
+                  text_font: roboto_16
+                  text_color: 0x94a3b8
+                  text: "All sensors normal"
+
+        # Keypad
+        - obj:
+            width: 280
+            height: 280
+            x: 100
+            y: 200
+            bg_color: 0x1a1a2e
+            radius: 15
+            pad_all: 10
+            layout:
+              type: GRID
+              grid_columns: [FR(1), FR(1), FR(1)]
+              grid_rows: [FR(1), FR(1), FR(1), FR(1)]
+            widgets:
+              - btn:
+                  grid_cell_column_pos: 0
+                  grid_cell_row_pos: 0
+                  width: 75
+                  height: 55
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: roboto_24
+                        text: "1"
+                  on_click:
+                    - logger.log: "Key 1"
+              - btn:
+                  grid_cell_column_pos: 1
+                  grid_cell_row_pos: 0
+                  width: 75
+                  height: 55
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: roboto_24
+                        text: "2"
+                  on_click:
+                    - logger.log: "Key 2"
+              - btn:
+                  grid_cell_column_pos: 2
+                  grid_cell_row_pos: 0
+                  width: 75
+                  height: 55
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: roboto_24
+                        text: "3"
+                  on_click:
+                    - logger.log: "Key 3"
+              - btn:
+                  grid_cell_column_pos: 0
+                  grid_cell_row_pos: 1
+                  width: 75
+                  height: 55
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: roboto_24
+                        text: "4"
+                  on_click:
+                    - logger.log: "Key 4"
+              - btn:
+                  grid_cell_column_pos: 1
+                  grid_cell_row_pos: 1
+                  width: 75
+                  height: 55
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: roboto_24
+                        text: "5"
+                  on_click:
+                    - logger.log: "Key 5"
+              - btn:
+                  grid_cell_column_pos: 2
+                  grid_cell_row_pos: 1
+                  width: 75
+                  height: 55
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: roboto_24
+                        text: "6"
+                  on_click:
+                    - logger.log: "Key 6"
+              - btn:
+                  grid_cell_column_pos: 0
+                  grid_cell_row_pos: 2
+                  width: 75
+                  height: 55
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: roboto_24
+                        text: "7"
+                  on_click:
+                    - logger.log: "Key 7"
+              - btn:
+                  grid_cell_column_pos: 1
+                  grid_cell_row_pos: 2
+                  width: 75
+                  height: 55
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: roboto_24
+                        text: "8"
+                  on_click:
+                    - logger.log: "Key 8"
+              - btn:
+                  grid_cell_column_pos: 2
+                  grid_cell_row_pos: 2
+                  width: 75
+                  height: 55
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: roboto_24
+                        text: "9"
+                  on_click:
+                    - logger.log: "Key 9"
+              - btn:
+                  grid_cell_column_pos: 0
+                  grid_cell_row_pos: 3
+                  width: 75
+                  height: 55
+                  bg_color: 0xc0392b
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: material_24
+                        text: "\U000F0156"
+                  on_click:
+                    - logger.log: "Clear"
+              - btn:
+                  grid_cell_column_pos: 1
+                  grid_cell_row_pos: 3
+                  width: 75
+                  height: 55
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: roboto_24
+                        text: "0"
+                  on_click:
+                    - logger.log: "Key 0"
+              - btn:
+                  grid_cell_column_pos: 2
+                  grid_cell_row_pos: 3
+                  width: 75
+                  height: 55
+                  bg_color: 0x27ae60
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: material_24
+                        text: "\U000F012C"
+                  on_click:
+                    - logger.log: "Enter"
+
+    # ===== SETTINGS PAGE =====
+    - id: settings_page
+      widgets:
+        - obj:
+            width: 480
+            height: 50
+            bg_color: 0x16213e
+            radius: 0
+            widgets:
+              - btn:
+                  width: 50
+                  height: 40
+                  x: 5
+                  y: 5
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text_font: material_24
+                        text: "\U000F004D"
+                  on_click:
+                    then:
+                      - lvgl.page.show: main_page
+              - label:
+                  x: 70
+                  y: 12
+                  text_font: roboto_24
+                  text: "Settings"
+
+        # Brightness slider
+        - obj:
+            width: 440
+            height: 80
+            x: 20
+            y: 70
+            bg_color: 0x0f3460
+            radius: 15
+            widgets:
+              - label:
+                  x: 20
+                  y: 10
+                  text_font: roboto_16
+                  text: "Display Brightness"
+              - slider:
+                  id: brightness_slider
+                  x: 20
+                  y: 40
+                  width: 400
+                  height: 20
+                  min_value: 10
+                  max_value: 100
+                  value: 100
+                  on_value:
+                    then:
+                      - light.turn_on:
+                          id: display_backlight
+                          brightness: !lambda "return x / 100.0;"
+
+        # System info
+        - obj:
+            width: 440
+            height: 200
+            x: 20
+            y: 170
+            bg_color: 0x0f3460
+            radius: 15
+            pad_all: 20
+            widgets:
+              - label:
+                  text_font: roboto_16
+                  text: "System Information"
+                  text_color: 0x94a3b8
+              - label:
+                  id: settings_wifi_info
+                  y: 35
+                  text_font: roboto_14
+                  text: "WiFi: Connected"
+              - label:
+                  id: settings_ip_info
+                  y: 60
+                  text_font: roboto_14
+                  text: "IP: 0.0.0.0"
+              - label:
+                  id: settings_uptime
+                  y: 85
+                  text_font: roboto_14
+                  text: "Uptime: 0:00:00"
+              - label:
+                  id: settings_memory
+                  y: 110
+                  text_font: roboto_14
+                  text: "Free Memory: -- KB"
+              - label:
+                  y: 145
+                  text_font: roboto_14
+                  text_color: 0x94a3b8
+                  text: "ESP32-4848S040C_I | 480x480"
+
+        # Restart button
+        - btn:
+            width: 200
+            height: 50
+            x: 140
+            y: 400
+            bg_color: 0xc0392b
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Restart Device"
+            on_click:
+              then:
+                - button.press: restart_button
+
+# Fonts
+font:
+  - file: "gfonts://Roboto"
+    id: roboto_48
+    size: 48
+    glyphs: "0123456789°CF.:-% "
+  - file: "gfonts://Roboto"
+    id: roboto_36
+    size: 36
+    glyphs: "0123456789°CF.:-% "
+  - file: "gfonts://Roboto"
+    id: roboto_24
+    size: 24
+  - file: "gfonts://Roboto"
+    id: roboto_20
+    size: 20
+  - file: "gfonts://Roboto"
+    id: roboto_16
+    size: 16
+  - file: "gfonts://Roboto"
+    id: roboto_14
+    size: 14
+  - file: "gfonts://Roboto@500"
+    id: roboto_bold_20
+    size: 20
+  # Material Design Icons
+  - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: material_48
+    size: 48
+    glyphs: [
+      "\U000F099D", # shield-home
+      "\U000F0335", # lightbulb
+      "\U000F0238", # fan (hvac)
+      "\U000F075A", # music
+      "\U000F0D5D", # cctv
+      "\U000F0493", # cog/settings
+    ]
+  - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: material_36
+    size: 36
+    glyphs: [
+      "\U000F099D", # shield-home
+      "\U000F0335", # lightbulb
+      "\U000F0238", # fan
+      "\U000F075A", # music
+      "\U000F0D5D", # cctv
+      "\U000F0493", # settings
+      "\U000F005D", # chevron-up
+      "\U000F0046", # chevron-down
+    ]
+  - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: material_24
+    size: 24
+    glyphs: [
+      "\U000F05A9", # wifi
+      "\U000F004D", # arrow-left
+      "\U000F0156", # close
+      "\U000F012C", # check
+    ]
+
+# Time
+time:
+  - platform: homeassistant
+    id: ha_time
+    on_time_sync:
+      then:
+        - lvgl.label.update:
+            id: header_time
+            text: !lambda |-
+              char buf[10];
+              auto time = id(ha_time).now();
+              snprintf(buf, sizeof(buf), "%02d:%02d", time.hour, time.minute);
+              return std::string(buf);
+    on_time:
+      - seconds: 0
+        then:
+          - lvgl.label.update:
+              id: header_time
+              text: !lambda |-
+                char buf[10];
+                auto time = id(ha_time).now();
+                snprintf(buf, sizeof(buf), "%02d:%02d", time.hour, time.minute);
+                return std::string(buf);
+          - lvgl.label.update:
+              id: header_date
+              text: !lambda |-
+                char buf[20];
+                auto time = id(ha_time).now();
+                strftime(buf, sizeof(buf), "%a, %b %d", &time);
+                return std::string(buf);
+
+# Sensors
+sensor:
+  - platform: uptime
+    id: uptime_sensor
+    update_interval: 60s
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: settings_uptime
+            text: !lambda |-
+              int seconds = (int)x;
+              int hours = seconds / 3600;
+              int minutes = (seconds % 3600) / 60;
+              char buf[32];
+              snprintf(buf, sizeof(buf), "Uptime: %d:%02d:%02d", hours, minutes, seconds % 60);
+              return std::string(buf);
+
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi Signal"
+    id: wifi_signal_db
+    update_interval: 60s
+
+  - platform: internal_temperature
+    name: "${friendly_name} CPU Temperature"
+    update_interval: 60s
+
+  # Home Assistant sensors - uncomment and modify as needed
+  # - platform: homeassistant
+  #   id: indoor_temp
+  #   entity_id: sensor.indoor_temperature
+  #   on_value:
+  #     then:
+  #       - lvgl.label.update:
+  #           id: footer_temp
+  #           text: !lambda |-
+  #             char buf[16];
+  #             snprintf(buf, sizeof(buf), "%.1f°F", x);
+  #             return std::string(buf);
+
+  # - platform: homeassistant
+  #   id: indoor_humidity
+  #   entity_id: sensor.indoor_humidity
+  #   on_value:
+  #     then:
+  #       - lvgl.label.update:
+  #           id: footer_humidity
+  #           text: !lambda |-
+  #             char buf[16];
+  #             snprintf(buf, sizeof(buf), "%.0f%%", x);
+  #             return std::string(buf);
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "${friendly_name} IP Address"
+      id: wifi_ip
+      on_value:
+        then:
+          - lvgl.label.update:
+              id: footer_ip
+              text: !lambda return x;
+          - lvgl.label.update:
+              id: settings_ip_info
+              text: !lambda return "IP: " + x;
+    ssid:
+      name: "${friendly_name} Connected SSID"
+      on_value:
+        then:
+          - lvgl.label.update:
+              id: settings_wifi_info
+              text: !lambda return "WiFi: " + x;
+
+binary_sensor:
+  - platform: status
+    name: "${friendly_name} Status"
+
+button:
+  - platform: restart
+    name: "${friendly_name} Restart"
+    id: restart_button
+
+# Diagnostic switch
+switch:
+  - platform: template
+    name: "${friendly_name} Antiburn"
+    id: antiburn_switch
+    optimistic: true
+    on_turn_on:
+      then:
+        - lvgl.pause:
+            show_snow: true
+    on_turn_off:
+      then:
+        - lvgl.resume:

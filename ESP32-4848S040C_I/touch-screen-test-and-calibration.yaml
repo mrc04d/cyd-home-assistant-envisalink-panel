@@ -1,0 +1,247 @@
+substitutions:
+  device_name: esp32-4848s040-touch-test
+  friendly_name: "4inch Touch Test"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  platformio_options:
+    board_build.flash_mode: dio
+    board_build.f_flash: 80000000L
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    version: recommended
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
+      CONFIG_SPIRAM_RODATA: "y"
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: "YOUR_API_KEY_HERE"
+
+ota:
+  - platform: esphome
+    password: "YOUR_OTA_PASSWORD_HERE"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${device_name} Fallback"
+    password: "fallback123"
+
+captive_portal:
+
+# Global variables for touch tracking
+globals:
+  - id: touch_x
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: touch_y
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: touch_pressed
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: touch_count
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: last_corner
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+# I2C bus for touch controller
+i2c:
+  - id: bus_a
+    sda: GPIO19
+    scl: GPIO45
+    scan: true
+    frequency: 400kHz
+
+# Backlight control
+output:
+  - platform: ledc
+    pin: GPIO38
+    id: backlight_pwm
+    frequency: 1220Hz
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "${friendly_name} Backlight"
+    id: display_backlight
+    restore_mode: ALWAYS_ON
+    default_transition_length: 250ms
+
+# Touch controller - GT911
+touchscreen:
+  - platform: gt911
+    id: touch_screen
+    interrupt_pin: GPIO4
+    i2c_id: bus_a
+    on_touch:
+      then:
+        - lambda: |-
+            id(touch_x) = touch.x;
+            id(touch_y) = touch.y;
+            id(touch_pressed) = true;
+            id(touch_count) += 1;
+            
+            // Detect which corner was touched for calibration
+            if (touch.x < 60 && touch.y < 60) {
+              id(last_corner) = 1;  // Top-left
+            } else if (touch.x > 420 && touch.y < 60) {
+              id(last_corner) = 2;  // Top-right
+            } else if (touch.x < 60 && touch.y > 420) {
+              id(last_corner) = 3;  // Bottom-left
+            } else if (touch.x > 420 && touch.y > 420) {
+              id(last_corner) = 4;  // Bottom-right
+            }
+            
+            ESP_LOGI("touch", "Touch at X=%d, Y=%d", touch.x, touch.y);
+        - component.update: main_display
+    on_release:
+      then:
+        - lambda: |-
+            id(touch_pressed) = false;
+        - component.update: main_display
+
+# Display configuration
+display:
+  - platform: qspi_amoled
+    model: T4-S3
+    id: main_display
+    dimensions:
+      width: 480
+      height: 480
+    color_order: rgb
+    brightness: 255
+    cs_pin: GPIO6
+    reset_pin: GPIO5
+    enable_pin: GPIO7
+    update_interval: never
+    auto_clear_enabled: false
+    lambda: |-
+      // Clear screen
+      it.fill(Color(20, 20, 40));
+      
+      // Title
+      it.printf(240, 25, id(roboto_20), Color(255, 255, 255), TextAlign::CENTER, "TOUCH CALIBRATION TEST");
+      
+      // Draw corner targets (touch these to test calibration)
+      // Top-left
+      it.filled_circle(30, 60, 25, id(last_corner) == 1 ? Color(0, 255, 0) : Color(255, 0, 0));
+      it.printf(30, 60, id(roboto_14), Color(255, 255, 255), TextAlign::CENTER, "TL");
+      it.printf(30, 95, id(roboto_12), Color(200, 200, 200), TextAlign::CENTER, "0,0");
+      
+      // Top-right
+      it.filled_circle(450, 60, 25, id(last_corner) == 2 ? Color(0, 255, 0) : Color(255, 0, 0));
+      it.printf(450, 60, id(roboto_14), Color(255, 255, 255), TextAlign::CENTER, "TR");
+      it.printf(450, 95, id(roboto_12), Color(200, 200, 200), TextAlign::CENTER, "480,0");
+      
+      // Bottom-left
+      it.filled_circle(30, 420, 25, id(last_corner) == 3 ? Color(0, 255, 0) : Color(255, 0, 0));
+      it.printf(30, 420, id(roboto_14), Color(255, 255, 255), TextAlign::CENTER, "BL");
+      it.printf(30, 455, id(roboto_12), Color(200, 200, 200), TextAlign::CENTER, "0,480");
+      
+      // Bottom-right
+      it.filled_circle(450, 420, 25, id(last_corner) == 4 ? Color(0, 255, 0) : Color(255, 0, 0));
+      it.printf(450, 420, id(roboto_14), Color(255, 255, 255), TextAlign::CENTER, "BR");
+      it.printf(450, 455, id(roboto_12), Color(200, 200, 200), TextAlign::CENTER, "480,480");
+      
+      // Center crosshair target
+      it.line(220, 240, 260, 240, Color(100, 100, 100));
+      it.line(240, 220, 240, 260, Color(100, 100, 100));
+      it.circle(240, 240, 20, Color(100, 100, 100));
+      
+      // Current touch info box
+      it.filled_rectangle(90, 140, 300, 120, Color(40, 40, 60));
+      it.rectangle(90, 140, 300, 120, Color(100, 100, 150));
+      
+      it.printf(240, 155, id(roboto_16), Color(200, 200, 200), TextAlign::CENTER, "CURRENT TOUCH");
+      
+      if (id(touch_pressed)) {
+        it.printf(240, 185, id(roboto_24), Color(0, 255, 0), TextAlign::CENTER, "PRESSED");
+        it.printf(240, 220, id(roboto_20), Color(255, 255, 0), TextAlign::CENTER, "X: %d  Y: %d", id(touch_x), id(touch_y));
+      } else {
+        it.printf(240, 185, id(roboto_24), Color(150, 150, 150), TextAlign::CENTER, "RELEASED");
+        it.printf(240, 220, id(roboto_20), Color(150, 150, 150), TextAlign::CENTER, "X: %d  Y: %d", id(touch_x), id(touch_y));
+      }
+      
+      // Touch counter
+      it.printf(240, 285, id(roboto_16), Color(200, 200, 200), TextAlign::CENTER, "Total touches: %d", id(touch_count));
+      
+      // Draw touch indicator at current position
+      if (id(touch_pressed)) {
+        it.filled_circle(id(touch_x), id(touch_y), 15, Color(255, 255, 0));
+        it.circle(id(touch_x), id(touch_y), 20, Color(255, 255, 255));
+      }
+      
+      // Instructions
+      it.printf(240, 330, id(roboto_14), Color(150, 200, 150), TextAlign::CENTER, "Touch the RED circles in each corner");
+      it.printf(240, 350, id(roboto_14), Color(150, 200, 150), TextAlign::CENTER, "They turn GREEN when touched correctly");
+      
+      // Calibration values info
+      it.filled_rectangle(90, 370, 300, 40, Color(60, 40, 40));
+      it.rectangle(90, 370, 300, 40, Color(150, 100, 100));
+      it.printf(240, 390, id(roboto_12), Color(255, 200, 200), TextAlign::CENTER, 
+                "If corners are wrong, adjust touch rotation");
+
+# Fonts
+font:
+  - file: "gfonts://Roboto"
+    id: roboto_24
+    size: 24
+  - file: "gfonts://Roboto"
+    id: roboto_20
+    size: 20
+  - file: "gfonts://Roboto"
+    id: roboto_16
+    size: 16
+  - file: "gfonts://Roboto"
+    id: roboto_14
+    size: 14
+  - file: "gfonts://Roboto"
+    id: roboto_12
+    size: 12
+
+# Uptime sensor to refresh display
+sensor:
+  - platform: uptime
+    name: "${friendly_name} Uptime"
+    id: uptime_sensor
+    update_interval: 5s
+
+# Reset touch counter button
+button:
+  - platform: template
+    name: "${friendly_name} Reset Touch Counter"
+    on_press:
+      then:
+        - lambda: |-
+            id(touch_count) = 0;
+            id(last_corner) = 0;
+        - component.update: main_display
+
+  - platform: restart
+    name: "${friendly_name} Restart"
