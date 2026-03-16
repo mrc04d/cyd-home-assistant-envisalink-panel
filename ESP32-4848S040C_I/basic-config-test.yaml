@@ -1,0 +1,288 @@
+# =============================================================================
+# Guition ESP32-4848S040C_I - Basic Test Configuration
+# =============================================================================
+# This is a minimal working configuration to test your 4-inch 480x480 display.
+# Use this to verify your hardware is working before loading the full alarm panel.
+#
+# Hardware:
+#   - Board: Guition ESP32-4848S040C_I
+#   - Display: 4.0" 480x480 ST7701S RGB LCD
+#   - Touch: GT911 Capacitive (I2C)
+#   - ESP32: ESP32-S3 with 16MB Flash, 8MB PSRAM (Octal)
+#
+# Purchase: https://www.aliexpress.com/item/1005008797813823.html
+#
+# Verified Working Pins:
+#   - Backlight: GPIO38
+#   - Touch I2C: SDA=GPIO19, SCL=GPIO45
+#   - Display SPI Init: CLK=GPIO48, MOSI=GPIO47
+#   - Display RGB: See data_pins section below
+# =============================================================================
+
+substitutions:
+  device_name: guition-4inch-test
+  friendly_name: "Guition 4inch Test"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  platformio_options:
+    board_build.flash_mode: dio
+    board_build.f_flash: 80000000L
+    build_flags:
+      - "-DARDUINO_USB_CDC_ON_BOOT=0"
+  on_boot:
+    priority: 800
+    then:
+      - light.turn_on:
+          id: backlight
+          brightness: 100%
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    version: recommended
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
+      CONFIG_SPIRAM_RODATA: "y"
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  level: DEBUG
+
+api:
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+
+# =============================================================================
+# WiFi Configuration
+# =============================================================================
+# Option 1: Use the captive portal (default)
+#   - On first boot, the device creates a WiFi access point
+#   - Connect to "Guition 4inch Test Setup" with password "configme123"
+#   - A portal will open to configure your WiFi credentials
+#
+# Option 2: Hardcode your WiFi credentials
+#   - Uncomment the ssid/password lines below
+#   - Add your credentials to secrets.yaml (ESPHome Dashboard → Secrets):
+#       wifi_ssid: "Your_WiFi_Name"
+#       wifi_password: "Your_WiFi_Password"
+#   - Or replace !secret references with your actual credentials
+#
+# Option 3: Static IP (optional, use with Option 2)
+#   - Uncomment the manual_ip section below
+# =============================================================================
+wifi:
+  # Uncomment below to hardcode WiFi credentials
+  # ssid: !secret wifi_ssid
+  # password: !secret wifi_password
+  
+  # Optional: Uncomment below for static IP
+  # manual_ip:
+  #   static_ip: 192.168.1.70
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  #   dns1: 192.168.1.1
+  
+  # Fallback/Setup AP - connects to this if no WiFi configured or connection fails
+  ap:
+    ssid: "${friendly_name} Setup"
+    password: "configme123"
+  
+  reboot_timeout: 0s
+
+captive_portal:
+
+# =============================================================================
+# Hardware Configuration
+# =============================================================================
+
+# SPI for ST7701S initialization commands
+spi:
+  - id: lcd_spi
+    clk_pin: GPIO48
+    mosi_pin: GPIO47
+
+# I2C for GT911 touch controller (polling mode - no interrupt pin)
+i2c:
+  id: touchscreen_bus
+  sda: GPIO19
+  scl:
+    number: GPIO45
+    ignore_strapping_warning: true
+  frequency: 400kHz
+
+# Backlight PWM
+output:
+  - platform: ledc
+    id: backlight_pwm
+    pin: GPIO38
+    frequency: 150Hz
+    min_power: 0.01
+    zero_means_zero: true
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "${friendly_name} Backlight"
+    id: backlight
+    restore_mode: ALWAYS_ON
+    default_transition_length: 500ms
+
+# =============================================================================
+# Display - ST7701S 480x480 RGB LCD
+# =============================================================================
+display:
+  - platform: st7701s
+    id: my_display
+    dimensions:
+      width: 480
+      height: 480
+    spi_mode: MODE3
+    data_rate: 2MHz
+    color_order: RGB
+    invert_colors: false
+    cs_pin: GPIO39
+    de_pin: GPIO18
+    hsync_pin: GPIO16
+    vsync_pin: GPIO17
+    pclk_pin: GPIO21
+    pclk_frequency: 12MHz
+    pclk_inverted: false
+    hsync_pulse_width: 8
+    hsync_front_porch: 10
+    hsync_back_porch: 20
+    vsync_pulse_width: 8
+    vsync_front_porch: 10
+    vsync_back_porch: 10
+    update_interval: never
+    auto_clear_enabled: false
+    init_sequence:
+      - 1
+      - [0xFF, 0x77, 0x01, 0x00, 0x00, 0x10]
+      - [0xCD, 0x00]
+    data_pins:
+      red: [11, 12, 13, 14, 0]
+      green: [8, 20, 3, 46, 9, 10]
+      blue: [4, 5, 6, 7, 15]
+
+# =============================================================================
+# Touchscreen - GT911 (Polling Mode)
+# =============================================================================
+touchscreen:
+  - platform: gt911
+    id: my_touchscreen
+    display: my_display
+    on_touch:
+      - lambda: |-
+          ESP_LOGI("touch", "Touch at X=%d, Y=%d", touch.x, touch.y);
+
+# =============================================================================
+# LVGL Test UI
+# =============================================================================
+lvgl:
+  displays:
+    - my_display
+  touchscreens:
+    - my_touchscreen
+  buffer_size: 25%
+  log_level: WARN
+  color_depth: 16
+  
+  pages:
+    - id: test_page
+      bg_color: 0x0D1117
+      widgets:
+        # Header
+        - label:
+            align: TOP_MID
+            y: 30
+            text: "Guition ESP32-4848S040C_I"
+            text_color: 0xFF6600
+            text_font: montserrat_28
+
+        - label:
+            align: TOP_MID
+            y: 70
+            text: "Display & Touch Test"
+            text_color: 0x8B949E
+            text_font: montserrat_22
+
+        # Status card
+        - obj:
+            align: CENTER
+            y: -20
+            width: 400
+            height: 150
+            bg_color: 0x161B22
+            radius: 20
+            border_width: 2
+            border_color: 0x71CC2E
+
+        - label:
+            id: status_label
+            align: CENTER
+            y: -40
+            text: "Touch the screen!"
+            text_color: 0x71CC2E
+            text_font: montserrat_36
+
+        - label:
+            id: touch_coords
+            align: CENTER
+            y: 20
+            text: "X: --- Y: ---"
+            text_color: 0x8B949E
+            text_font: montserrat_22
+
+        # Test button
+        - button:
+            align: BOTTOM_MID
+            y: -50
+            width: 250
+            height: 80
+            radius: 15
+            bg_color: 0xFF6600
+            on_press:
+              - logger.log: "Test button pressed!"
+              - lvgl.label.update:
+                  id: status_label
+                  text: "Button Works!"
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "TEST BUTTON"
+                  text_color: 0xFFFFFF
+                  text_font: montserrat_28
+
+# =============================================================================
+# Sensors
+# =============================================================================
+sensor:
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi Signal"
+    update_interval: 60s
+
+  - platform: uptime
+    name: "${friendly_name} Uptime"
+    update_interval: 60s
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "${friendly_name} IP Address"
+
+button:
+  - platform: restart
+    name: "${friendly_name} Restart"
