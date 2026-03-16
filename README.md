@@ -1,10 +1,10 @@
 # CYD Alarm Panel for Home Assistant
 
-A modern, touchscreen alarm panel for Home Assistant using the ESP32-2432S028R "Cheap Yellow Display" (CYD).
+A modern, touchscreen alarm panel for Home Assistant using the cheap esp32 displays.
 
 ## Overview
 
-This project turns the inexpensive ESP32-2432S028R display (~$15) into a fully functional alarm panel for Home Assistant. It features a modern dark UI, PIN code entry, and seamless integration with Home Assistant alarm control panel entities.
+This project turns the inexpensive display (~$15-$30) into a fully functional alarm panel for Home Assistant. It features a modern dark UI, PIN code entry, and seamless integration with Home Assistant alarm control panel entities.
 
 ## Compatibility
 
@@ -38,19 +38,80 @@ However, it can be easily adapted for:
 | Entry Delay | ENTRY DELAY | Orange |
 | Triggered | ALARM! | Red |
 
-## Hardware
+## Supported Hardware
 
-### Required
-**ESP32-2432S028R** (Cheap Yellow Display / CYD)
-- 2.8" ILI9341 320x240 TFT display
-- XPT2046 resistive touchscreen
-- ESP32-WROOM-32 module
-- USB-C and Micro USB ports
+### 1. CYD 2.8" (320x240) ESP32-2432S028R
 
-### Where to Buy
-- **AliExpress**: Search for "ESP32-2432S028R"
-- **Amazon**: Search for "Cheap Yellow Display ESP32"
-- Typical price: $10-15 USD
+| Specification | Details |
+|---------------|---------|
+| Display | ILI9341 SPI LCD (320x240) |
+| Touch | XPT2046 Resistive |
+| MCU | ESP32-WROOM-32 |
+| Config | `cyd-alarm-panel.yaml` |
+| Purchase | Search "ESP32 2.8 inch CYD" on AliExpress |
+
+### 2. Guition ESP32-4848S040C_I (480x480) - NEW ✨
+
+| Specification | Details |
+|---------------|---------|
+| Display | ST7701S RGB LCD (480x480, 4.0") |
+| Touch | GT911 Capacitive (I2C, polling mode) |
+| MCU | ESP32-S3 with 16MB Flash, 8MB PSRAM (Octal) |
+| Config | `ESP32-4848S040C_I/cyd-alarm-panel-4-inch.yaml` |
+| Test Config | `ESP32-4848S040C_I/basic-config-test.yaml` |
+| Purchase | [AliExpress](https://www.aliexpress.com/item/1005008797813823.html) |
+
+#### Verified Pinout for ESP32-4848S040C_I
+
+| Function | GPIO | Notes |
+|----------|------|-------|
+| **Display** | | |
+| CS | 39 | SPI chip select |
+| DE | 18 | Data enable |
+| HSYNC | 16 | Horizontal sync |
+| VSYNC | 17 | Vertical sync |
+| PCLK | 21 | Pixel clock (12MHz) |
+| SPI CLK | 48 | Init commands |
+| SPI MOSI | 47 | Init commands |
+| Red Data | 11, 12, 13, 14, 0 | 5-bit red |
+| Green Data | 8, 20, 3, 46, 9, 10 | 6-bit green |
+| Blue Data | 4, 5, 6, 7, 15 | 5-bit blue |
+| **Touch** | | |
+| SDA | 19 | I2C data |
+| SCL | 45 | I2C clock (strapping pin) |
+| **Other** | | |
+| Backlight | 38 | PWM controlled |
+
+**Important Notes:**
+- Touch uses **polling mode** (no interrupt pin) for maximum compatibility
+- GPIO45 (SCL) is a strapping pin - warning suppressed in config
+- Display requires ST7701S initialization via SPI before RGB works
+
+# Verified Pinout for ESP32-2432S028R
+
+### Display (ILI9341)
+| Function | GPIO |
+|----------|------|
+| CLK | 14 |
+| MOSI | 13 |
+| MISO | 12 |
+| CS | 15 |
+| DC | 2 |
+| Backlight | 21 |
+
+### Touchscreen (XPT2046)
+| Function | GPIO |
+|----------|------|
+| CLK | 25 |
+| MOSI | 32 |
+| MISO | 39 |
+| CS | 33 |
+| IRQ | 36 |
+
+### Other
+| Function | GPIO |
+|----------|------|
+| Buzzer | 26 |
 
 ## Getting Started
 
@@ -69,221 +130,11 @@ This project builds upon the excellent CYD setup guide:
 
 First, verify your CYD is working with this basic test config:
 
-```yaml
-esphome:
-  name: cyd-display-test
-
-esp32:
-  board: esp32dev
-  framework:
-    type: esp-idf
-
-logger:
-
-api:
-  reboot_timeout: 0s
-
-ota:
-  - platform: esphome
-
-# =============================================================================
-# WiFi Configuration
-# =============================================================================
-# Option 1: Use the captive portal (default)
-#   - On first boot, the device creates a WiFi access point
-#   - Connect to "CYD-Alarm Setup" with password "configme123"
-#   - A portal will open to configure your WiFi credentials
-#
-# Option 2: Hardcode your WiFi credentials
-#   - Uncomment the ssid/password lines below
-#   - Add your credentials to secrets.yaml (ESPHome Dashboard → Secrets):
-#       wifi_ssid: "Your_WiFi_Name"
-#       wifi_password: "Your_WiFi_Password"
-#   - Or replace !secret references with your actual credentials
-#
-# Option 3: Static IP (optional, use with Option 2)
-#   - Uncomment the manual_ip section below
-# =============================================================================
-wifi:
-  # Uncomment below to hardcode WiFi credentials
-  # ssid: !secret wifi_ssid
-  # password: !secret wifi_password
-  
-  # Optional: Uncomment below for static IP
-  # manual_ip:
-  #   static_ip: 192.168.1.70
-  #   gateway: 192.168.1.1
-  #   subnet: 255.255.255.0
-  #   dns1: 192.168.1.1
-  
-  # Fallback/Setup AP - connects to this if no WiFi configured or connection fails
-  ap:
-    ssid: "CYD-Alarm Setup"
-    password: "configme123"
-  
-  reboot_timeout: 0s
-
-captive_portal:
-
-output:
-  - platform: ledc
-    pin: GPIO21
-    id: backlight_pwm
-
-light:
-  - platform: monochromatic
-    output: backlight_pwm
-    name: Display Backlight
-    id: backlight
-    restore_mode: ALWAYS_ON
-
-spi:
-  - id: tft
-    clk_pin: GPIO14
-    mosi_pin: GPIO13
-    miso_pin: GPIO12
-
-display:
-  - platform: ili9xxx
-    model: ILI9341
-    spi_id: tft
-    cs_pin: GPIO15
-    dc_pin: GPIO2
-    auto_clear_enabled: true
-    invert_colors: false
-    color_palette: 8BIT
-    show_test_card: true
-    rotation: 0
-    dimensions:
-      width: 320
-      height: 240
-```
-
 If you see a blue screen with "CYD TEST" text, proceed to the next step.
 
-### Step 2: Touchscreen Calibration
+### Step 2: If needed, Touchscreen Calibration
 
 Add touchscreen support and calibrate:
-
-```yaml
-esphome:
-  name: cyd-alarm
-
-esp32:
-  board: esp32dev
-  framework:
-    type: esp-idf
-
-logger:
-
-api:
-  reboot_timeout: 0s
-
-ota:
-  - platform: esphome
-
-# =============================================================================
-# WiFi Configuration
-# =============================================================================
-# Option 1: Use the captive portal (default)
-#   - On first boot, the device creates a WiFi access point
-#   - Connect to "CYD-Alarm Setup" with password "configme123"
-#   - A portal will open to configure your WiFi credentials
-#
-# Option 2: Hardcode your WiFi credentials
-#   - Uncomment the ssid/password lines below
-#   - Add your credentials to secrets.yaml (ESPHome Dashboard → Secrets):
-#       wifi_ssid: "Your_WiFi_Name"
-#       wifi_password: "Your_WiFi_Password"
-#   - Or replace !secret references with your actual credentials
-#
-# Option 3: Static IP (optional, use with Option 2)
-#   - Uncomment the manual_ip section below
-# =============================================================================
-wifi:
-  # Uncomment below to hardcode WiFi credentials
-  # ssid: !secret wifi_ssid
-  # password: !secret wifi_password
-  
-  # Optional: Uncomment below for static IP
-  # manual_ip:
-  #   static_ip: 192.168.1.70
-  #   gateway: 192.168.1.1
-  #   subnet: 255.255.255.0
-  #   dns1: 192.168.1.1
-  
-  # Fallback/Setup AP - connects to this if no WiFi configured or connection fails
-  ap:
-    ssid: "CYD-Alarm Setup"
-    password: "configme123"
-  
-  reboot_timeout: 0s
-
-captive_portal:
-
-output:
-  - platform: ledc
-    pin: GPIO21
-    id: backlight_pwm
-
-light:
-  - platform: monochromatic
-    output: backlight_pwm
-    name: Display Backlight
-    id: backlight
-    restore_mode: ALWAYS_ON
-
-spi:
-  - id: tft
-    clk_pin: GPIO14
-    mosi_pin: GPIO13
-    miso_pin: GPIO12
-
-  - id: touch
-    clk_pin: GPIO25
-    mosi_pin: GPIO32
-    miso_pin: GPIO39
-
-display:
-  - platform: ili9xxx
-    model: ILI9341
-    id: my_display
-    spi_id: tft
-    cs_pin: GPIO15
-    dc_pin: GPIO2
-    auto_clear_enabled: true
-    invert_colors: false
-    color_palette: 8BIT
-    rotation: 0
-    dimensions:
-      width: 320
-      height: 240
-    lambda: |-
-      it.fill(Color(32, 32, 32));
-      it.print(160, 120, id(roboto), Color(255, 255, 255), TextAlign::CENTER, "TOUCH TEST");
-
-touchscreen:
-  - platform: xpt2046
-    id: my_touchscreen
-    spi_id: touch
-    cs_pin: GPIO33
-    interrupt_pin: GPIO36
-    calibration:
-      x_min: 280
-      x_max: 3860
-      y_min: 340
-      y_max: 3860
-    on_touch:
-      - logger.log: "Touch detected!"
-      - light.turn_on:
-          id: backlight
-          brightness: 1.0
-
-font:
-  - file: "gfonts://Roboto"
-    id: roboto
-    size: 24
-```
 
 Touch each corner of the screen and note the values in the ESPHome logs. Use these values to set your calibration.
 
@@ -293,23 +144,9 @@ Touch each corner of the screen and note the values in the ESPHome logs. Use the
 
 2. Edit the substitutions at the top:
 
-```yaml
-substitutions:
-  device_name: cyd-alarm
-  friendly_name: "CYD Alarm Panel"
-  # Change this to your alarm entity ID
-  alarm_entity: "alarm_control_panel.home_alarm_partition_1"
-  # Grace period in milliseconds (10 seconds = 10000)
-  grace_period_ms: "10000"
-  # Change this to your timezone - examples:
-  # Australia/Sydney, America/New_York, Europe/London, Asia/Tokyo
-  # Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-  timezone: "Australia/Sydney"
-```
-
 3. Configure your WIFI credentials using which ever method you prefer
    
-4. Flash to your CYD via USB for initial install
+4. Flash to your device
 
 5. Future updates can be done OTA
 
@@ -347,20 +184,6 @@ Full list: [Wikipedia Timezone Database](https://en.wikipedia.org/wiki/List_of_t
 ### Touch Calibration
 
 If touch is inaccurate, adjust the calibration values:
-
-```yaml
-touchscreen:
-  - platform: xpt2046
-    calibration:
-      x_min: 435
-      x_max: 3835
-      y_min: 225
-      y_max: 3635
-    transform:
-      swap_xy: true
-      mirror_x: true
-      mirror_y: true
-```
 
 ## Usage
 
