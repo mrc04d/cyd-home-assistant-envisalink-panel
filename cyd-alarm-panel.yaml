@@ -930,9 +930,9 @@ script:
           lv_obj_set_style_bg_color(id(wifi_bar3), lv_color_hex(bars >= 3 ? color_on : color_off), 0);
           lv_obj_set_style_bg_color(id(wifi_bar4), lv_color_hex(bars >= 4 ? color_on : color_off), 0);
 
-# =========================
-# INTERVALS
-# =========================
+# =============================================================================
+# Intervals
+# =============================================================================
 interval:
   - interval: 1s
     then:
@@ -950,7 +950,23 @@ interval:
 
   - interval: 5s
     then:
-      - script.execute: check_wifi_and_show_page
+      - lambda: |-
+          // Standard LVGL check using raw pointers
+          lv_obj_t *active_screen = lv_scr_act();
+          
+          // Check if status_label is on the current screen
+          bool on_main_page = (lv_obj_get_screen(id(status_label)) == active_screen);
+          
+          uint32_t idle_time = millis() - id(last_touch);
+          
+          if (!on_main_page) {
+            // Stay on Numpad unless idle for 30s
+            if (idle_time > 30000) {
+              id(check_wifi_and_show_page).execute();
+            }
+          } else {
+            id(check_wifi_and_show_page).execute();
+          }
 
   - interval: 8s
     then:
@@ -960,4 +976,7 @@ interval:
             call.set_brightness(0.15);
             call.set_transition_length(1500);
             call.perform();
+            
+            // Security: Reset to main status when dimming
+            id(check_wifi_and_show_page).execute();
           }

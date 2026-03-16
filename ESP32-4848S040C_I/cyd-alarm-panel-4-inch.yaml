@@ -103,7 +103,7 @@ wifi:
   
   # Optional: Uncomment below for static IP
   # manual_ip:
-  #   static_ip: 192.168.1.70
+  #   static_ip: 192.168.1.108
   #   gateway: 192.168.1.1
   #   subnet: 255.255.255.0
   #   dns1: 192.168.1.1
@@ -969,9 +969,9 @@ script:
           lv_obj_set_style_bg_color(id(wifi_bar3), lv_color_hex(bars >= 3 ? color_on : color_off), 0);
           lv_obj_set_style_bg_color(id(wifi_bar4), lv_color_hex(bars >= 4 ? color_on : color_off), 0);
 
-# =============================================================================
-# Intervals
-# =============================================================================
+# =========================
+# INTERVALS
+# =========================
 interval:
   - interval: 1s
     then:
@@ -989,7 +989,23 @@ interval:
 
   - interval: 5s
     then:
-      - script.execute: check_wifi_and_show_page
+      - lambda: |-
+          // Standard LVGL check using raw pointers
+          lv_obj_t *active_screen = lv_scr_act();
+          
+          // ESPHome's 'id(status_label)' returns the raw pointer directly here
+          bool on_main_page = (lv_obj_get_screen(id(status_label)) == active_screen);
+          
+          uint32_t idle_time = millis() - id(last_touch);
+          
+          if (!on_main_page) {
+            // We are on Numpad. Only leave if idle for 30s.
+            if (idle_time > 30000) {
+              id(check_wifi_and_show_page).execute();
+            }
+          } else {
+            id(check_wifi_and_show_page).execute();
+          }
 
   - interval: 8s
     then:
@@ -999,4 +1015,7 @@ interval:
             call.set_brightness(0.15);
             call.set_transition_length(1500);
             call.perform();
+            
+            // Security: Reset to main status when dimming
+            id(check_wifi_and_show_page).execute();
           }
