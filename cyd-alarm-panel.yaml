@@ -24,6 +24,7 @@ esphome:
       - delay: 100ms
       - script.execute: update_status
       - script.execute: update_wifi_bars
+      - script.execute: refresh_pin_display
 
 esp32:
   board: esp32dev
@@ -41,38 +42,23 @@ ota:
 # =============================================================================
 # WiFi Configuration
 # =============================================================================
-# Option 1: Use the captive portal (default)
-#   - On first boot, the device creates a WiFi access point
-#   - Connect to "CYD Alarm Panel Setup" with password "configme123"
-#   - A portal will open to configure your WiFi credentials
-#
-# Option 2: Hardcode your WiFi credentials
-#   - Uncomment the ssid/password lines below
-#   - Add your credentials to secrets.yaml (ESPHome Dashboard → Secrets):
-#       wifi_ssid: "Your_WiFi_Name"
-#       wifi_password: "Your_WiFi_Password"
-#   - Or replace !secret references with your actual credentials
-#
-# Option 3: Static IP (optional, use with Option 2)
-#   - Uncomment the manual_ip section below
-# =============================================================================
 wifi:
   # Uncomment below to hardcode WiFi credentials
   # ssid: !secret wifi_ssid
   # password: !secret wifi_password
-  
+
   # Optional: Uncomment below for static IP
   # manual_ip:
   #   static_ip: 192.168.1.70
   #   gateway: 192.168.1.1
   #   subnet: 255.255.255.0
   #   dns1: 192.168.1.1
-  
+
   # Fallback/Setup AP - connects to this if no WiFi configured or connection fails
   ap:
     ssid: "${friendly_name} Setup"
     password: "configme123"
-  
+
   reboot_timeout: 0s
 
 captive_portal:
@@ -102,6 +88,10 @@ globals:
     type: uint32_t
     restore_value: no
     initial_value: '0'
+  - id: disarm_pending
+    type: bool
+    restore_value: no
+    initial_value: 'false'
 
 # =========================
 # HARDWARE
@@ -223,7 +213,6 @@ lvgl:
     - id: wifi_setup_page
       bg_color: 0x0D1117
       widgets:
-        # Header bar
         - obj:
             align: TOP_MID
             width: 320
@@ -239,7 +228,6 @@ lvgl:
             text_color: 0xFF6600
             text_font: montserrat_22
 
-        # Instructions card
         - obj:
             align: CENTER
             y: 10
@@ -282,7 +270,6 @@ lvgl:
             text: "in the portal that opens"
             text_color: 0x8B949E
 
-        # Status indicator
         - label:
             align: BOTTOM_MID
             y: -15
@@ -293,7 +280,6 @@ lvgl:
     - id: main_page
       bg_color: 0x0D1117
       widgets:
-        # Top bar background
         - obj:
             align: TOP_MID
             width: 320
@@ -302,7 +288,6 @@ lvgl:
             radius: 0
             border_width: 0
 
-        # Time
         - label:
             id: time_label
             text: "00:00"
@@ -311,7 +296,6 @@ lvgl:
             y: 7
             text_color: 0x8B949E
 
-        # WiFi signal bars
         - obj:
             id: wifi_bar1
             align: TOP_RIGHT
@@ -356,7 +340,6 @@ lvgl:
             bg_color: 0x3C3C3C
             border_width: 0
 
-        # Status card background
         - obj:
             id: status_card
             align: CENTER
@@ -368,7 +351,6 @@ lvgl:
             border_width: 2
             border_color: 0x30363D
 
-        # Main status
         - label:
             id: status_label
             text: "Loading..."
@@ -377,7 +359,6 @@ lvgl:
             text_color: 0xFFFFFF
             text_font: montserrat_28
 
-        # STAY button
         - button:
             id: stay_btn
             align: BOTTOM_LEFT
@@ -401,7 +382,6 @@ lvgl:
                   text_color: 0xFFFFFF
                   text_font: montserrat_18
 
-        # AWAY button
         - button:
             id: away_btn
             align: BOTTOM_RIGHT
@@ -425,7 +405,6 @@ lvgl:
                   text_color: 0xFFFFFF
                   text_font: montserrat_18
 
-        # CANCEL button
         - button:
             id: cancel_btn
             align: BOTTOM_MID
@@ -435,8 +414,8 @@ lvgl:
             radius: 12
             bg_color: 0xFF6600
             on_press:
-              - logger.log: "Cancel button pressed - checking grace period"
-              - script.execute: handle_cancel
+              - logger.log: "Cancel button pressed - showing numpad"
+              - script.execute: open_numpad
             widgets:
               - label:
                   align: CENTER
@@ -444,7 +423,6 @@ lvgl:
                   text_color: 0xFFFFFF
                   text_font: montserrat_18
 
-        # DISARM button
         - button:
             id: disarm_btn
             align: BOTTOM_MID
@@ -455,14 +433,7 @@ lvgl:
             bg_color: 0xFF6600
             on_press:
               - logger.log: "DISARM button pressed - showing numpad"
-              - lambda: id(pin_code) = "";
-              - lvgl.label.update:
-                  id: pin_display
-                  text: "Enter PIN"
-              - lvgl.widget.update:
-                  id: pin_display
-                  text_color: 0xFFFFFF
-              - lvgl.page.show: numpad_page
+              - script.execute: open_numpad
             widgets:
               - label:
                   align: CENTER
@@ -474,13 +445,39 @@ lvgl:
     - id: numpad_page
       bg_color: 0x0D1117
       widgets:
-        # Left side - Keypad (3x4 grid)
-        # Row 1: 1 2 3
-        - button:
+        - obj:
             x: 8
             y: 8
-            width: 62
-            height: 52
+            width: 304
+            height: 40
+            bg_color: 0x161B22
+            radius: 8
+            border_width: 2
+            border_color: 0x30363D
+
+        - label:
+            id: pin_display
+            align: TOP_MID
+            y: 12
+            text: "ENTER PIN"
+            text_align: CENTER
+            text_color: 0x8B949E
+            text_font: montserrat_16
+
+        - label:
+            id: pin_mask
+            align: TOP_MID
+            y: 28
+            text: ""
+            text_align: CENTER
+            text_color: 0xFFFFFF
+            text_font: montserrat_16
+
+        - button:
+            x: 8
+            y: 56
+            width: 70
+            height: 40
             radius: 8
             bg_color: 0xFF6600
             on_press:
@@ -492,13 +489,13 @@ lvgl:
                   align: CENTER
                   text: "1"
                   text_color: 0xFFFFFF
-                  text_font: montserrat_28
+                  text_font: montserrat_24
 
         - button:
-            x: 78
-            y: 8
-            width: 62
-            height: 52
+            x: 86
+            y: 56
+            width: 70
+            height: 40
             radius: 8
             bg_color: 0xFF6600
             on_press:
@@ -510,13 +507,13 @@ lvgl:
                   align: CENTER
                   text: "2"
                   text_color: 0xFFFFFF
-                  text_font: montserrat_28
+                  text_font: montserrat_24
 
         - button:
-            x: 148
-            y: 8
-            width: 62
-            height: 52
+            x: 164
+            y: 56
+            width: 70
+            height: 40
             radius: 8
             bg_color: 0xFF6600
             on_press:
@@ -528,14 +525,30 @@ lvgl:
                   align: CENTER
                   text: "3"
                   text_color: 0xFFFFFF
-                  text_font: montserrat_28
+                  text_font: montserrat_24
 
-        # Row 2: 4 5 6
+        - button:
+            x: 242
+            y: 56
+            width: 70
+            height: 40
+            radius: 8
+            bg_color: 0x3C3C3C
+            on_press:
+              - script.execute: handle_clr_back
+            widgets:
+              - label:
+                  id: clr_back_label
+                  align: CENTER
+                  text: "BACK"
+                  text_color: 0xFFFFFF
+                  text_font: montserrat_16
+
         - button:
             x: 8
-            y: 66
-            width: 62
-            height: 52
+            y: 104
+            width: 70
+            height: 40
             radius: 8
             bg_color: 0xFF6600
             on_press:
@@ -547,13 +560,13 @@ lvgl:
                   align: CENTER
                   text: "4"
                   text_color: 0xFFFFFF
-                  text_font: montserrat_28
+                  text_font: montserrat_24
 
         - button:
-            x: 78
-            y: 66
-            width: 62
-            height: 52
+            x: 86
+            y: 104
+            width: 70
+            height: 40
             radius: 8
             bg_color: 0xFF6600
             on_press:
@@ -565,13 +578,13 @@ lvgl:
                   align: CENTER
                   text: "5"
                   text_color: 0xFFFFFF
-                  text_font: montserrat_28
+                  text_font: montserrat_24
 
         - button:
-            x: 148
-            y: 66
-            width: 62
-            height: 52
+            x: 164
+            y: 104
+            width: 70
+            height: 40
             radius: 8
             bg_color: 0xFF6600
             on_press:
@@ -583,14 +596,30 @@ lvgl:
                   align: CENTER
                   text: "6"
                   text_color: 0xFFFFFF
-                  text_font: montserrat_28
+                  text_font: montserrat_24
 
-        # Row 3: 7 8 9
+        - button:
+            x: 242
+            y: 104
+            width: 70
+            height: 40
+            radius: 8
+            bg_color: 0x71CC2E
+            on_press:
+              - logger.log: "OK pressed - sending disarm"
+              - script.execute: send_disarm
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "OK"
+                  text_color: 0xFFFFFF
+                  text_font: montserrat_18
+
         - button:
             x: 8
-            y: 124
-            width: 62
-            height: 52
+            y: 152
+            width: 70
+            height: 40
             radius: 8
             bg_color: 0xFF6600
             on_press:
@@ -602,13 +631,13 @@ lvgl:
                   align: CENTER
                   text: "7"
                   text_color: 0xFFFFFF
-                  text_font: montserrat_28
+                  text_font: montserrat_24
 
         - button:
-            x: 78
-            y: 124
-            width: 62
-            height: 52
+            x: 86
+            y: 152
+            width: 70
+            height: 40
             radius: 8
             bg_color: 0xFF6600
             on_press:
@@ -620,13 +649,13 @@ lvgl:
                   align: CENTER
                   text: "8"
                   text_color: 0xFFFFFF
-                  text_font: montserrat_28
+                  text_font: montserrat_24
 
         - button:
-            x: 148
-            y: 124
-            width: 62
-            height: 52
+            x: 164
+            y: 152
+            width: 70
+            height: 40
             radius: 8
             bg_color: 0xFF6600
             on_press:
@@ -638,14 +667,13 @@ lvgl:
                   align: CENTER
                   text: "9"
                   text_color: 0xFFFFFF
-                  text_font: montserrat_28
+                  text_font: montserrat_24
 
-        # Row 4: (empty) 0 (empty)
         - button:
-            x: 78
-            y: 182
-            width: 62
-            height: 52
+            x: 86
+            y: 200
+            width: 70
+            height: 32
             radius: 8
             bg_color: 0xFF6600
             on_press:
@@ -657,90 +685,7 @@ lvgl:
                   align: CENTER
                   text: "0"
                   text_color: 0xFFFFFF
-                  text_font: montserrat_28
-
-        # Right side - PIN display and control buttons
-        # PIN display area
-        - obj:
-            x: 218
-            y: 8
-            width: 94
-            height: 52
-            bg_color: 0x161B22
-            radius: 8
-            border_width: 2
-            border_color: 0x30363D
-
-        - label:
-            id: pin_display
-            x: 265
-            y: 20
-            text: "Enter PIN"
-            text_align: CENTER
-            align: TOP_MID
-            text_color: 0xFFFFFF
-            text_font: montserrat_18
-
-        # CLR button
-        - button:
-            x: 218
-            y: 66
-            width: 94
-            height: 52
-            radius: 8
-            bg_color: 0x3C3C3C
-            on_press:
-              - logger.log: "Clear pressed"
-              - lambda: id(pin_code) = "";
-              - lvgl.label.update:
-                  id: pin_display
-                  text: "Enter PIN"
-              - lvgl.widget.update:
-                  id: pin_display
-                  text_color: 0xFFFFFF
-            widgets:
-              - label:
-                  align: CENTER
-                  text: "CLR"
-                  text_color: 0xFFFFFF
                   text_font: montserrat_22
-
-        # OK button
-        - button:
-            x: 218
-            y: 124
-            width: 94
-            height: 52
-            radius: 8
-            bg_color: 0x71CC2E
-            on_press:
-              - logger.log: "OK pressed - sending disarm"
-              - script.execute: send_disarm
-            widgets:
-              - label:
-                  align: CENTER
-                  text: "OK"
-                  text_color: 0xFFFFFF
-                  text_font: montserrat_22
-
-        # BACK button
-        - button:
-            x: 218
-            y: 182
-            width: 94
-            height: 52
-            radius: 8
-            bg_color: 0x3C3C3C
-            on_press:
-              - logger.log: "Back pressed"
-              - lambda: id(pin_code) = "";
-              - lvgl.page.show: main_page
-            widgets:
-              - label:
-                  align: CENTER
-                  text: "BACK"
-                  text_color: 0xFFFFFF
-                  text_font: montserrat_18
 
 # =========================
 # SCRIPTS & LOGIC
@@ -756,63 +701,139 @@ script:
           else:
             - lvgl.page.show: wifi_setup_page
 
+  - id: open_numpad
+    then:
+      - lambda: |-
+          id(pin_code).clear();
+          id(disarm_pending) = false;
+      - script.execute: refresh_pin_display
+      - lvgl.page.show: numpad_page
+
+  - id: refresh_pin_display
+    then:
+      - lambda: |-
+          std::string masked = "";
+          for (size_t i = 0; i < id(pin_code).length(); i++) {
+            if (!masked.empty()) masked += " ";
+            masked += "*";
+          }
+
+          if (id(pin_code).empty()) {
+            lv_label_set_text(id(pin_display), "ENTER PIN");
+            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(0x8B949E), 0);
+            lv_label_set_text(id(pin_mask), "");
+            lv_label_set_text(id(clr_back_label), "BACK");
+          } else {
+            lv_label_set_text(id(pin_display), "CODE");
+            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(0x8B949E), 0);
+            lv_label_set_text(id(pin_mask), masked.c_str());
+            lv_label_set_text(id(clr_back_label), "CLR");
+          }
+
+  - id: handle_clr_back
+    then:
+      - if:
+          condition:
+            lambda: 'return id(disarm_pending);'
+          then:
+            - logger.log: "Ignoring CLR/BACK while disarm pending"
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(pin_code).empty();'
+                then:
+                  - logger.log: "BACK pressed"
+                  - lvgl.page.show: main_page
+                else:
+                  - logger.log: "CLR pressed"
+                  - lambda: 'id(pin_code).clear();'
+                  - script.execute: refresh_pin_display
+
   - id: add_pin_digit
     parameters:
       digit: string
     then:
       - lambda: |-
+          if (id(disarm_pending)) {
+            return;
+          }
+
+          if (id(pin_code).length() >= 8) {
+            lv_label_set_text(id(pin_display), "MAX LENGTH");
+            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(0xD94A4A), 0);
+            return;
+          }
+
           id(pin_code) += digit;
+
           std::string masked = "";
-          for (int i = 0; i < id(pin_code).length(); i++) {
+          for (size_t i = 0; i < id(pin_code).length(); i++) {
+            if (!masked.empty()) masked += " ";
             masked += "*";
           }
-          lv_label_set_text(id(pin_display), masked.c_str());
-          lv_obj_set_style_text_color(id(pin_display), lv_color_hex(0xFFFFFF), 0);
+
+          lv_label_set_text(id(pin_display), "CODE");
+          lv_obj_set_style_text_color(id(pin_display), lv_color_hex(0x8B949E), 0);
+          lv_label_set_text(id(pin_mask), masked.c_str());
+          lv_label_set_text(id(clr_back_label), "CLR");
 
   - id: handle_cancel
     then:
-      - lambda: |-
-          uint32_t elapsed = millis() - id(arming_started);
-          ESP_LOGD("cancel", "Time since arming: %d ms", elapsed);
-      - if:
-          condition:
-            lambda: 'return (millis() - id(arming_started)) < ${grace_period_ms};'
-          then:
-            - logger.log: "Within grace period - cancelling without code"
-            - homeassistant.action:
-                action: alarm_control_panel.alarm_disarm
-                data:
-                  entity_id: ${alarm_entity}
-          else:
-            - logger.log: "Grace period expired - showing numpad"
-            - lambda: id(pin_code) = "";
-            - lvgl.label.update:
-                id: pin_display
-                text: "Enter PIN"
-            - lvgl.widget.update:
-                id: pin_display
-                text_color: 0xFFFFFF
-            - lvgl.page.show: numpad_page
+      - logger.log: "Cancel pressed - showing numpad"
+      - script.execute: open_numpad
 
   - id: send_disarm
     then:
-      - homeassistant.action:
-          action: alarm_control_panel.alarm_disarm
-          data:
-            entity_id: ${alarm_entity}
-          data_template:
-            code: !lambda return id(pin_code);
-      - delay: 1500ms
       - if:
           condition:
-            lambda: 'return id(alarm_state).state != "disarmed";'
+            lambda: 'return id(disarm_pending);'
           then:
-            - lambda: |-
-                lv_label_set_text(id(pin_display), "WRONG PIN");
-                lv_obj_set_style_text_color(id(pin_display), lv_color_hex(0x3C4CE7), 0);
-                id(pin_code) = "";
+            - logger.log: "Disarm already in progress"
           else:
-            - lambda: id(pin_code) = "";
+            - if:
+                condition:
+                  lambda: 'return id(pin_code).length() < 4;'
+                then:
+                  - lambda: |-
+                      lv_label_set_text(id(pin_display), "INVALID");
+                      lv_obj_set_style_text_color(id(pin_display), lv_color_hex(0xD94A4A), 0);
+                      lv_label_set_text(id(pin_mask), "MIN 4 DIGITS");
+                  - delay: 1000ms
+                  - script.execute: refresh_pin_display
+                else:
+                  - lambda: |-
+                      id(disarm_pending) = true;
+                      lv_label_set_text(id(pin_display), "CHECKING...");
+                      lv_obj_set_style_text_color(id(pin_display), lv_color_hex(0x227EE6), 0);
+                  - homeassistant.action:
+                      action: alarm_control_panel.alarm_disarm
+                      data:
+                        entity_id: ${alarm_entity}
+                        code: !lambda 'return id(pin_code);'
+                  - delay: 2500ms
+                  - if:
+                      condition:
+                        lambda: 'return id(alarm_state).state == "disarmed";'
+                      then:
+                        - lambda: |-
+                            id(pin_code).clear();
+                            id(disarm_pending) = false;
+                            lv_label_set_text(id(pin_display), "DISARMED");
+                            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(0x71CC2E), 0);
+                            lv_label_set_text(id(pin_mask), "");
+                            lv_label_set_text(id(clr_back_label), "BACK");
+                        - delay: 500ms
+                        - lvgl.page.show: main_page
+                      else:
+                        - lambda: |-
+                            id(pin_code).clear();
+                            id(disarm_pending) = false;
+                            lv_label_set_text(id(pin_display), "WRONG CODE");
+                            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(0xD94A4A), 0);
+                            lv_label_set_text(id(pin_mask), "");
+                            lv_label_set_text(id(clr_back_label), "BACK");
+                        - delay: 1200ms
+                        - script.execute: refresh_pin_display
 
   - id: update_status
     then:
@@ -906,16 +927,20 @@ script:
           condition:
             lambda: 'return id(alarm_state).state == "disarmed";'
           then:
+            - lambda: |-
+                id(pin_code).clear();
+                id(disarm_pending) = false;
+            - script.execute: refresh_pin_display
             - lvgl.page.show: main_page
 
   - id: update_wifi_bars
     then:
       - lambda: |-
           float signal = id(wifi_signal_db).state;
-          
+
           uint32_t color_on = 0x71CC2E;
           uint32_t color_off = 0x3C3C3C;
-          
+
           int bars = 0;
           if (!isnan(signal)) {
             if (signal > -50) bars = 4;
@@ -924,7 +949,7 @@ script:
             else if (signal > -80) bars = 1;
             else bars = 0;
           }
-          
+
           lv_obj_set_style_bg_color(id(wifi_bar1), lv_color_hex(bars >= 1 ? color_on : color_off), 0);
           lv_obj_set_style_bg_color(id(wifi_bar2), lv_color_hex(bars >= 2 ? color_on : color_off), 0);
           lv_obj_set_style_bg_color(id(wifi_bar3), lv_color_hex(bars >= 3 ? color_on : color_off), 0);
@@ -953,12 +978,12 @@ interval:
       - lambda: |-
           // Standard LVGL check using raw pointers
           lv_obj_t *active_screen = lv_scr_act();
-          
+
           // Check if status_label is on the current screen
           bool on_main_page = (lv_obj_get_screen(id(status_label)) == active_screen);
-          
+
           uint32_t idle_time = millis() - id(last_touch);
-          
+
           if (!on_main_page) {
             // Stay on Numpad unless idle for 30s
             if (idle_time > 30000) {
@@ -976,7 +1001,7 @@ interval:
             call.set_brightness(0.15);
             call.set_transition_length(1500);
             call.perform();
-            
+
             // Security: Reset to main status when dimming
             id(check_wifi_and_show_page).execute();
           }
