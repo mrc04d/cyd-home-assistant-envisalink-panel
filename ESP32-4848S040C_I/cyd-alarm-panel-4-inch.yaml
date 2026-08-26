@@ -11,6 +11,18 @@ substitutions:
 packages:
   core: !include ../common/alarm-core.yaml
 
+# =============================================================================
+# WiFi Configuration
+# =============================================================================
+# Shared WiFi/AP configuration lives in common/alarm-core.yaml.
+wifi:
+  # OPTIONAL STATIC IP - device-local opt-in only (never enable in core):
+  # manual_ip:
+  #   static_ip: 192.168.1.70
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  #   dns1: 192.168.1.1
+
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}

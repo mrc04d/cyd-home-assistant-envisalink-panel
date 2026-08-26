@@ -28,7 +28,7 @@ logger:
 # =============================================================================
 # Shared WiFi/AP configuration lives in common/alarm-core.yaml.
 wifi:
-  # Optional: Uncomment below for static IP
+  # OPTIONAL STATIC IP - device-local opt-in only (never enable in core):
   # manual_ip:
   #   static_ip: 192.168.1.70
   #   gateway: 192.168.1.1
