@@ -141,13 +141,13 @@ lvgl:
 
   pages:
     - id: wifi_setup_page
-      bg_color: 0x0D1117
+      bg_color: ${bg_dark}
       widgets:
         - obj:
             align: TOP_MID
             width: 480
             height: 80
-            bg_color: 0x161B22
+            bg_color: ${card_bg}
             radius: 0
             border_width: 0
 
@@ -163,7 +163,7 @@ lvgl:
             y: 20
             width: 450
             height: 300
-            bg_color: 0x161B22
+            bg_color: ${card_bg}
             radius: 18
             border_width: 3
             border_color: 0xFF6600
@@ -172,7 +172,7 @@ lvgl:
             align: CENTER
             y: -60
             text: "1. Connect to WiFi network:"
-            text_color: 0x8B949E
+            text_color: ${text_dim}
             text_font: montserrat_22
 
         - label:
@@ -180,45 +180,45 @@ lvgl:
             align: CENTER
             y: -16
             text: "${friendly_name} Setup"
-            text_color: 0x71CC2E
+            text_color: ${ok_green}
             text_font: montserrat_28
 
         - label:
             align: CENTER
             y: 36
             text: "2. Password: configme123"
-            text_color: 0x8B949E
+            text_color: ${text_dim}
             text_font: montserrat_22
 
         - label:
             align: CENTER
             y: 90
             text: "3. Configure your WiFi"
-            text_color: 0x8B949E
+            text_color: ${text_dim}
             text_font: montserrat_22
 
         - label:
             align: CENTER
             y: 136
             text: "in the portal that opens"
-            text_color: 0x8B949E
+            text_color: ${text_dim}
             text_font: montserrat_22
 
         - label:
             align: BOTTOM_MID
             y: -30
             text: "Waiting for connection..."
-            text_color: 0x3C3C3C
+            text_color: ${button_grey}
             text_font: montserrat_22
 
     - id: main_page
-      bg_color: 0x0D1117
+      bg_color: ${bg_dark}
       widgets:
         - obj:
             align: TOP_MID
             width: 480
             height: 64
-            bg_color: 0x161B22
+            bg_color: ${card_bg}
             radius: 0
             border_width: 0
 
@@ -228,7 +228,7 @@ lvgl:
             align: TOP_LEFT
             x: 18
             y: 20
-            text_color: 0x8B949E
+            text_color: ${text_dim}
             text_font: montserrat_28
 
         - obj:
@@ -239,7 +239,7 @@ lvgl:
             width: 9
             height: 9
             radius: 2
-            bg_color: 0x3C3C3C
+            bg_color: ${button_grey}
             border_width: 0
 
         - obj:
@@ -250,7 +250,7 @@ lvgl:
             width: 9
             height: 15
             radius: 2
-            bg_color: 0x3C3C3C
+            bg_color: ${button_grey}
             border_width: 0
 
         - obj:
@@ -261,7 +261,7 @@ lvgl:
             width: 9
             height: 21
             radius: 2
-            bg_color: 0x3C3C3C
+            bg_color: ${button_grey}
             border_width: 0
 
         - obj:
@@ -272,7 +272,7 @@ lvgl:
             width: 9
             height: 27
             radius: 2
-            bg_color: 0x3C3C3C
+            bg_color: ${button_grey}
             border_width: 0
 
         - obj:
@@ -281,10 +281,10 @@ lvgl:
             y: -30
             width: 420
             height: 180
-            bg_color: 0x161B22
+            bg_color: ${card_bg}
             radius: 24
             border_width: 3
-            border_color: 0x30363D
+            border_color: ${border_idle}
 
         - label:
             id: status_label
@@ -387,17 +387,17 @@ lvgl:
                   text_font: montserrat_36
 
     - id: numpad_page
-      bg_color: 0x0D1117
+      bg_color: ${bg_dark}
       widgets:
         - obj:
             align: TOP_MID
             y: 18
             width: 444
             height: 92
-            bg_color: 0x161B22
+            bg_color: ${card_bg}
             radius: 18
             border_width: 3
-            border_color: 0x30363D
+            border_color: ${border_idle}
 
         - label:
             id: pin_display
@@ -405,7 +405,7 @@ lvgl:
             y: 30
             text: "ENTER CODE"
             text_align: CENTER
-            text_color: 0x8B949E
+            text_color: ${text_dim}
             text_font: montserrat_22
 
         - label:

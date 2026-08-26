@@ -135,13 +135,13 @@ lvgl:
   pages:
     # ---- WIFI SETUP PAGE ----
     - id: wifi_setup_page
-      bg_color: 0x0D1117
+      bg_color: ${bg_dark}
       widgets:
         - obj:
             align: TOP_MID
             width: 320
             height: 40
-            bg_color: 0x161B22
+            bg_color: ${card_bg}
             radius: 0
             border_width: 0
 
@@ -157,7 +157,7 @@ lvgl:
             y: 10
             width: 300
             height: 150
-            bg_color: 0x161B22
+            bg_color: ${card_bg}
             radius: 12
             border_width: 2
             border_color: 0xFF6600
@@ -166,49 +166,49 @@ lvgl:
             align: CENTER
             y: -30
             text: "1. Connect to WiFi network:"
-            text_color: 0x8B949E
+            text_color: ${text_dim}
 
         - label:
             id: ap_ssid_label
             align: CENTER
             y: -8
             text: "${friendly_name} Setup"
-            text_color: 0x71CC2E
+            text_color: ${button_green}
             text_font: montserrat_18
 
         - label:
             align: CENTER
             y: 18
             text: "2. Password: configme123"
-            text_color: 0x8B949E
+            text_color: ${text_dim}
 
         - label:
             align: CENTER
             y: 45
             text: "3. Configure your WiFi"
-            text_color: 0x8B949E
+            text_color: ${text_dim}
 
         - label:
             align: CENTER
             y: 68
             text: "in the portal that opens"
-            text_color: 0x8B949E
+            text_color: ${text_dim}
 
         - label:
             align: BOTTOM_MID
             y: -15
             text: "Waiting for connection..."
-            text_color: 0x3C3C3C
+            text_color: ${button_grey}
 
     # ---- MAIN PAGE ----
     - id: main_page
-      bg_color: 0x0D1117
+      bg_color: ${bg_dark}
       widgets:
         - obj:
             align: TOP_MID
             width: 320
             height: 32
-            bg_color: 0x161B22
+            bg_color: ${card_bg}
             radius: 0
             border_width: 0
 
@@ -218,7 +218,7 @@ lvgl:
             align: TOP_LEFT
             x: 12
             y: 7
-            text_color: 0x8B949E
+            text_color: ${text_dim}
 
         - obj:
             id: wifi_bar1
@@ -228,7 +228,7 @@ lvgl:
             width: 6
             height: 6
             radius: 1
-            bg_color: 0x3C3C3C
+            bg_color: ${button_grey}
             border_width: 0
 
         - obj:
@@ -239,7 +239,7 @@ lvgl:
             width: 6
             height: 9
             radius: 1
-            bg_color: 0x3C3C3C
+            bg_color: ${button_grey}
             border_width: 0
 
         - obj:
@@ -250,7 +250,7 @@ lvgl:
             width: 6
             height: 12
             radius: 1
-            bg_color: 0x3C3C3C
+            bg_color: ${button_grey}
             border_width: 0
 
         - obj:
@@ -261,7 +261,7 @@ lvgl:
             width: 6
             height: 15
             radius: 1
-            bg_color: 0x3C3C3C
+            bg_color: ${button_grey}
             border_width: 0
 
         - obj:
@@ -270,10 +270,10 @@ lvgl:
             y: -15
             width: 280
             height: 90
-            bg_color: 0x161B22
+            bg_color: ${card_bg}
             radius: 16
             border_width: 2
-            border_color: 0x30363D
+            border_color: ${border_idle}
 
         - label:
             id: status_label
@@ -291,7 +291,7 @@ lvgl:
             width: 130
             height: 55
             radius: 12
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - logger.log: "STAY button pressed!"
               - lambda: id(arming_started) = millis();
@@ -314,7 +314,7 @@ lvgl:
             width: 130
             height: 55
             radius: 12
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - logger.log: "AWAY button pressed!"
               - lambda: id(arming_started) = millis();
@@ -336,7 +336,7 @@ lvgl:
             width: 200
             height: 55
             radius: 12
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - logger.log: "Cancel button pressed - showing numpad"
               - script.execute: open_numpad
@@ -354,7 +354,7 @@ lvgl:
             width: 200
             height: 55
             radius: 12
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - logger.log: "DISARM button pressed - showing numpad"
               - script.execute: open_numpad
@@ -367,17 +367,17 @@ lvgl:
 
     # ---- NUMPAD PAGE ----
     - id: numpad_page
-      bg_color: 0x0D1117
+      bg_color: ${bg_dark}
       widgets:
         - obj:
             x: 8
             y: 8
             width: 304
             height: 40
-            bg_color: 0x161B22
+            bg_color: ${card_bg}
             radius: 8
             border_width: 2
-            border_color: 0x30363D
+            border_color: ${border_idle}
 
         - label:
             id: pin_display
@@ -385,7 +385,7 @@ lvgl:
             y: 12
             text: "ENTER PIN"
             text_align: CENTER
-            text_color: 0x8B949E
+            text_color: ${text_dim}
             text_font: montserrat_16
 
         - label:
@@ -403,7 +403,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -421,7 +421,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -439,7 +439,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -458,7 +458,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0x3C3C3C
+            bg_color: ${button_grey}
             on_press:
               - script.execute: handle_clr_back
             widgets:
@@ -475,7 +475,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -493,7 +493,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -511,7 +511,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -529,7 +529,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0x71CC2E
+            bg_color: ${button_green}
             on_press:
               - logger.log: "OK pressed - sending disarm"
               - script.execute: send_disarm
@@ -546,7 +546,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -564,7 +564,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -582,7 +582,7 @@ lvgl:
             width: 70
             height: 40
             radius: 8
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -600,7 +600,7 @@ lvgl:
             width: 70
             height: 32
             radius: 8
-            bg_color: 0xFF6600
+            bg_color: ${button_blue}
             on_press:
               - script.execute:
                   id: add_pin_digit

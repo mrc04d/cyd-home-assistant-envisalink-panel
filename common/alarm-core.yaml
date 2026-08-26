@@ -150,15 +150,19 @@ script:
 
   - id: refresh_pin_display
     then:
+      - script.execute: render_pin_mask
+
+  - id: render_pin_mask
+    mode: queued
+    then:
       - lambda: |-
           std::string masked = "";
           for (size_t i = 0; i < id(pin_code).length(); i++) {
             if (!masked.empty()) masked += " ";
             masked += "*";
           }
-
           if (id(pin_code).empty()) {
-            lv_label_set_text(id(pin_display), "ENTER PIN");
+            lv_label_set_text(id(pin_display), "ENTER CODE");
             lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${text_dim}), 0);
             lv_label_set_text(id(pin_mask), "");
             lv_label_set_text(id(clr_back_label), "BACK");
@@ -205,21 +209,7 @@ script:
 
           id(pin_code) += digit;
 
-          std::string masked = "";
-          for (size_t i = 0; i < id(pin_code).length(); i++) {
-            if (!masked.empty()) masked += " ";
-            masked += "*";
-          }
-
-          lv_label_set_text(id(pin_display), "CODE");
-          lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${text_dim}), 0);
-          lv_label_set_text(id(pin_mask), masked.c_str());
-          lv_label_set_text(id(clr_back_label), "CLR");
-
-  - id: handle_cancel
-    then:
-      - logger.log: "Cancel pressed - showing numpad"
-      - script.execute: open_numpad
+      - script.execute: render_pin_mask
 
   - id: send_disarm
     then:
@@ -327,8 +317,8 @@ script:
           }
           else if (state == "triggered") {
             display_text = "ALARM!";
-            text_color = 0x3C4CE7;
-            card_border = 0x3C4CE7;
+            text_color = ${error_red};
+            card_border = ${error_red};
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
