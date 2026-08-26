@@ -233,6 +233,17 @@ lvgl:
             text_font: montserrat_28
 
         - obj:
+            id: api_badge
+            align: TOP_RIGHT
+            x: -92
+            y: 28
+            width: 12
+            height: 12
+            radius: 6
+            bg_color: ${button_grey}
+            border_width: 0
+
+        - obj:
             id: wifi_bar1
             align: TOP_RIGHT
             x: -68

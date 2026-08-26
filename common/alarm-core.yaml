@@ -657,6 +657,16 @@ interval:
             lv_obj_set_style_text_color(id(status_label), lv_color_hex(c), 0);
           }
 
+          // HA-offline badge: green = API connected, red = not
+          bool api_ok;
+          #ifdef USE_API
+          api_ok = api::global_api_server->is_connected();
+          #else
+          api_ok = false;
+          #endif
+          lv_obj_set_style_bg_color(id(api_badge),
+              lv_color_hex(api_ok ? ${ok_green} : ${error_red}), 0);
+
   - interval: 10s
     then:
       - script.execute: update_wifi_bars
