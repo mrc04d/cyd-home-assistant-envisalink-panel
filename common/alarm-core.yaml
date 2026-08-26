@@ -27,6 +27,11 @@ substitutions:
   ok_green: "0x71CC2E"
   error_red: "0xD94A4A"
   info_blue: "0x227EE6"
+  # ---- timing defaults (override in device shell if ever needed) ----
+  pin_length: "4"
+  exit_delay_s: "30"
+  entry_delay_s: "15"
+  arm_timeout_s: "20"
 
 esphome:
   on_boot:
@@ -209,6 +214,14 @@ script:
 
           id(pin_code) += digit;
 
+          // Auto-submit when the code reaches its configured length;
+          // OK button still allows variable-length codes. CLR remains
+          // usable until submit; disarm_pending locks the keypad during
+          // verification (early-return above), preventing double-fire.
+          if (id(pin_code).length() >= ${pin_length}) {
+            id(autosubmit_pause).execute();
+          }
+
       - script.execute: render_pin_mask
 
   - id: send_disarm
@@ -239,30 +252,96 @@ script:
                       data:
                         entity_id: ${alarm_entity}
                         code: !lambda 'return id(pin_code);'
-                  - delay: 2500ms
-                  - if:
-                      condition:
-                        lambda: 'return id(alarm_state).state == "disarmed";'
-                      then:
-                        - lambda: |-
-                            id(pin_code).clear();
-                            id(disarm_pending) = false;
-                            lv_label_set_text(id(pin_display), "DISARMED");
-                            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${ok_green}), 0);
-                            lv_label_set_text(id(pin_mask), "");
-                            lv_label_set_text(id(clr_back_label), "BACK");
-                        - delay: 500ms
-                        - lvgl.page.show: main_page
-                      else:
-                        - lambda: |-
-                            id(pin_code).clear();
-                            id(disarm_pending) = false;
-                            lv_label_set_text(id(pin_display), "WRONG CODE");
-                            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${error_red}), 0);
-                            lv_label_set_text(id(pin_mask), "");
-                            lv_label_set_text(id(clr_back_label), "BACK");
-                        - delay: 1200ms
-                        - script.execute: refresh_pin_display
+                  - script.execute: disarm_verify
+
+  # Bounded wait for HA confirmation. 32 x 250ms = 8s max.
+  # Automation delays suspend ONLY this script - main loop stays live.
+  - id: disarm_verify
+    mode: single
+    then:
+      - repeat:
+          count: 32
+          then:
+            - delay: 250ms
+            - if:
+                condition:
+                  lambda: 'return id(alarm_state).state == "disarmed";'
+                then:
+                  - script.execute:
+                      id: disarm_result
+                      ok: true
+                  - script.stop: disarm_verify
+      # Reached only if 32 polls elapsed without confirmation
+      - if:
+          condition:
+            lambda: 'return id(disarm_pending);'
+          then:
+            - script.execute:
+                id: disarm_result
+                ok: false
+
+  - id: disarm_result
+    parameters:
+      ok: bool
+    then:
+      - lambda: |-
+          id(pin_code).clear();
+          id(disarm_pending) = false;
+      - if:
+          condition:
+            lambda: 'return ok;'
+          then:
+            - lambda: |-
+                lv_label_set_text(id(pin_display), "DISARMED");
+                lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${ok_green}), 0);
+                lv_label_set_text(id(pin_mask), "");
+                lv_label_set_text(id(clr_back_label), "BACK");
+            - script.execute: fx_disarm_success
+            - delay: 500ms
+            - lvgl.page.show: main_page
+          else:
+            - lambda: |-
+                // Timeout is not the same as a wrong PIN: if HA is
+                // unreachable we must not blame the entered code.
+                bool api_up = true;
+                #ifdef USE_API
+                api_up = api::global_api_server->is_connected();
+                #endif
+                if (api_up) {
+                  lv_label_set_text(id(pin_display), "WRONG CODE");
+                  lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${error_red}), 0);
+                } else {
+                  lv_label_set_text(id(pin_display), "HA OFFLINE");
+                  lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${info_blue}), 0);
+                }
+                lv_label_set_text(id(pin_mask), "");
+                lv_label_set_text(id(clr_back_label), "BACK");
+            - script.execute: fx_disarm_failed
+            - delay: 1200ms
+            - script.execute: render_pin_mask
+
+  - id: fx_disarm_success   # core-defined, delegates to device hooks
+    mode: queued
+    then:
+      - script.execute:
+          id: fx_buzzer
+          duration_ms: 60
+      - delay: 80ms
+      - script.execute:
+          id: fx_buzzer
+          duration_ms: 60
+
+  - id: fx_disarm_failed
+    mode: queued
+    then:
+      - script.execute:
+          id: fx_buzzer
+          duration_ms: 400
+
+  - id: autosubmit_pause
+    then:
+      - delay: 150ms        # cooperative: lets the last digit paint
+      - script.execute: send_disarm
 
   - id: update_status
     then:
