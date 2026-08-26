@@ -308,6 +308,7 @@ lvgl:
               bg_color: ${button_blue_pressed}
             on_press:
               - logger.log: "STAY button pressed"
+              - script.execute: mark_arming_started
               - homeassistant.action:
                   action: alarm_control_panel.alarm_arm_home
                   data:
@@ -333,6 +334,7 @@ lvgl:
               bg_color: ${button_blue_pressed}
             on_press:
               - logger.log: "AWAY button pressed"
+              - script.execute: mark_arming_started
               - homeassistant.action:
                   action: alarm_control_panel.alarm_arm_away
                   data:
@@ -356,8 +358,7 @@ lvgl:
             pressed:
               bg_color: ${button_blue_pressed}
             on_press:
-              - logger.log: "Cancel button pressed"
-              - script.execute: open_numpad
+              - script.execute: try_grace_cancel
             widgets:
               - label:
                   align: CENTER

@@ -343,6 +343,71 @@ script:
       - delay: 150ms        # cooperative: lets the last digit paint
       - script.execute: send_disarm
 
+  - id: mark_arming_started
+    then:
+      - lambda: 'id(arming_started) = millis();'
+
+  - id: try_grace_cancel
+    then:
+      - if:
+          condition:
+            lambda: 'return id(disarm_pending);'
+          then:
+            - logger.log: "Ignoring cancel - disarm verify in progress"
+          else:
+            - if:
+                condition:
+                  lambda: |-
+                    return id(alarm_state).state == "arming"
+                        && (millis() - id(arming_started)) < ${grace_period_ms};
+                then:
+                  - logger.log: "Grace period cancel - disarming without code"
+                  - lambda: |-
+                      // Symmetric mutex with send_disarm: block keypad
+                      // submits until grace_verify finishes.
+                      id(disarm_pending) = true;
+                      lv_label_set_text(id(status_label), "CANCELLING...");
+                      lv_obj_set_style_text_color(id(status_label), lv_color_hex(${info_blue}), 0);
+                  - homeassistant.action:
+                      action: alarm_control_panel.alarm_disarm
+                      data:
+                        entity_id: ${alarm_entity}
+                  - script.execute: grace_verify
+                else:
+                  - logger.log: "Outside grace period - PIN required"
+                  - script.execute: open_numpad
+
+  # Do NOT claim CANCELLED on faith: a code-less disarm can silently fail
+  # (HA offline, integration without default code). Wait for proof.
+  - id: grace_verify
+    mode: single
+    then:
+      - repeat:
+          count: 24            # 24 x 250ms = 6s - tolerates slow Envisalink round-trips
+          then:
+            - delay: 250ms
+            - if:
+                condition:
+                  lambda: 'return id(alarm_state).state != "arming";'
+                then:
+                  # Clear on EVERY success exit - "not arming" is not
+                  # necessarily "disarmed" (could be pending/armed_*), and
+                  # only the disarmed branch of update_status clears the
+                  # flag for us.
+                  - lambda: 'id(disarm_pending) = false;'
+                  - script.stop: grace_verify   # update_status renders the new state
+      - if:
+          condition:
+            lambda: 'return id(alarm_state).state == "arming";'
+          then:
+            - logger.log: "Grace cancel FAILED - still arming"
+            - lambda: |-
+                // Release the keypad mutex on the failure exit.
+                id(disarm_pending) = false;
+                lv_label_set_text(id(status_label), "CANCEL FAILED");
+                lv_obj_set_style_text_color(id(status_label), lv_color_hex(${error_red}), 0);
+            - script.execute: fx_disarm_failed
+
   - id: update_status
     then:
       - lambda: |-
