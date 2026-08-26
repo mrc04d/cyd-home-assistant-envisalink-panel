@@ -309,6 +309,7 @@ lvgl:
             on_press:
               - logger.log: "STAY button pressed"
               - script.execute: mark_arming_started
+              - script.execute: start_arm_watchdog
               - homeassistant.action:
                   action: alarm_control_panel.alarm_arm_home
                   data:
@@ -335,6 +336,7 @@ lvgl:
             on_press:
               - logger.log: "AWAY button pressed"
               - script.execute: mark_arming_started
+              - script.execute: start_arm_watchdog
               - homeassistant.action:
                   action: alarm_control_panel.alarm_arm_away
                   data:

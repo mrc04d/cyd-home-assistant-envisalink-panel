@@ -112,6 +112,18 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+  - id: countdown_deadline
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: watchdog_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: last_phase
+    type: std::string
+    restore_value: no
+    initial_value: '""'
 
 # =========================
 # HOME ASSISTANT ENTITIES
@@ -419,6 +431,10 @@ script:
           bool show_disarm_button = false;
           bool show_cancel_button = false;
 
+          // Phase change detection for countdown deadlines
+          bool phase_changed = (state != id(last_phase));
+          id(last_phase) = state;
+
           if (state == "disarmed") {
             display_text = "READY";
             text_color = ${ok_green};
@@ -426,6 +442,9 @@ script:
             show_arm_buttons = true;
             show_disarm_button = false;
             show_cancel_button = false;
+            id(countdown_deadline) = 0;
+            // Do NOT stop watchdog here - it must finish and report CHECK PANEL
+            // if the arm command silently did nothing.
           }
           else if (state == "armed_home") {
             display_text = "STAY ARMED";
@@ -434,6 +453,8 @@ script:
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
+            id(countdown_deadline) = 0;
+            id(watchdog_active) = false;
           }
           else if (state == "armed_away") {
             display_text = "AWAY ARMED";
@@ -442,6 +463,8 @@ script:
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
+            id(countdown_deadline) = 0;
+            id(watchdog_active) = false;
           }
           else if (state == "arming") {
             display_text = "EXIT DELAY";
@@ -450,6 +473,9 @@ script:
             show_arm_buttons = false;
             show_disarm_button = false;
             show_cancel_button = true;
+            if (phase_changed && ${exit_delay_s} != 0)
+              id(countdown_deadline) = millis() + ${exit_delay_s} * 1000UL;
+            id(watchdog_active) = false;
           }
           else if (state == "pending") {
             display_text = "ENTRY DELAY";
@@ -458,6 +484,9 @@ script:
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
+            if (phase_changed && ${entry_delay_s} != 0)
+              id(countdown_deadline) = millis() + ${entry_delay_s} * 1000UL;
+            id(watchdog_active) = false;
           }
           else if (state == "triggered") {
             display_text = "ALARM!";
@@ -466,6 +495,8 @@ script:
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
+            id(countdown_deadline) = 0;
+            id(watchdog_active) = false;
           }
 
           id(fx_alarm_visual)->execute(state == "triggered");
@@ -502,6 +533,28 @@ script:
                 id(disarm_pending) = false;
             - script.execute: refresh_pin_display
             - lvgl.page.show: main_page
+      - if:
+          condition:
+            lambda: |-
+              return id(alarm_state).state == "armed_home"
+                  || id(alarm_state).state == "armed_away"
+                  || id(alarm_state).state == "pending"
+                  || id(alarm_state).state == "triggered";
+          then:
+            - script.stop: start_arm_watchdog
+
+  - id: start_arm_watchdog
+    mode: restart
+    then:
+      - lambda: 'id(watchdog_active) = true;'
+      - delay: !lambda 'return ${arm_timeout_s} * 1000;'
+      - lambda: |-
+          if (id(watchdog_active) && id(countdown_deadline) == 0
+              && id(alarm_state).state == "disarmed") {
+            ESP_LOGW("watchdog", "Arm command produced no state change in %s s", "${arm_timeout_s}");
+            lv_label_set_text(id(status_label), "CHECK PANEL");
+            lv_obj_set_style_text_color(id(status_label), lv_color_hex(${error_red}), 0);
+          }
 
   - id: update_wifi_bars
     then:
@@ -537,6 +590,18 @@ interval:
             char buf[16];
             snprintf(buf, sizeof(buf), "%02d:%02d", time.hour, time.minute);
             lv_label_set_text(id(time_label), buf);
+          }
+
+          // Phase countdown (0 deadline = disabled)
+          // Wraparound-safe: unsigned subtraction stays correct across
+          // millis() rollover (~49.7 days); cap rejects bogus huge values.
+          if (id(countdown_deadline) != 0) {
+            std::string base = (id(alarm_state).state == "arming") ? "EXIT DELAY" : "ENTRY DELAY";
+            uint32_t remain = (uint32_t)(id(countdown_deadline) - millis()) / 1000UL;
+            if (remain > 3600UL) remain = 0;
+            char buf[40];
+            snprintf(buf, sizeof(buf), "%s - %us", base.c_str(), (unsigned)remain);
+            lv_label_set_text(id(status_label), buf);
           }
 
   - interval: 10s
