@@ -124,6 +124,10 @@ globals:
     type: std::string
     restore_value: no
     initial_value: '""'
+  - id: dimmed
+    type: bool
+    restore_value: no
+    initial_value: 'false'
 
 # =========================
 # HOME ASSISTANT ENTITIES
@@ -476,6 +480,11 @@ script:
             if (phase_changed && ${exit_delay_s} != 0)
               id(countdown_deadline) = millis() + ${exit_delay_s} * 1000UL;
             id(watchdog_active) = false;
+            id(last_touch) = millis();
+            id(screen_wake).execute();
+            auto call = id(backlight).turn_on();
+            call.set_brightness(1.0);
+            call.perform();
           }
           else if (state == "pending") {
             display_text = "ENTRY DELAY";
@@ -487,6 +496,11 @@ script:
             if (phase_changed && ${entry_delay_s} != 0)
               id(countdown_deadline) = millis() + ${entry_delay_s} * 1000UL;
             id(watchdog_active) = false;
+            id(last_touch) = millis();
+            id(screen_wake).execute();
+            auto call = id(backlight).turn_on();
+            call.set_brightness(1.0);
+            call.perform();
           }
           else if (state == "triggered") {
             display_text = "ALARM!";
@@ -497,6 +511,11 @@ script:
             show_cancel_button = false;
             id(countdown_deadline) = 0;
             id(watchdog_active) = false;
+            id(last_touch) = millis();
+            id(screen_wake).execute();
+            auto call = id(backlight).turn_on();
+            call.set_brightness(1.0);
+            call.perform();
           }
 
           id(fx_alarm_visual)->execute(state == "triggered");
@@ -555,6 +574,29 @@ script:
             lv_label_set_text(id(status_label), "CHECK PANEL");
             lv_obj_set_style_text_color(id(status_label), lv_color_hex(${error_red}), 0);
           }
+
+  - id: screen_wake
+    mode: restart
+    then:
+      - lambda: |-
+          id(dimmed) = false;
+          // Drop the input shield so taps reach real widgets again
+          lv_obj_clear_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
+
+  - id: screen_dim
+    then:
+      - lambda: |-
+          if (id(dimmed)) return;   // fix: no re-transition every tick
+          id(dimmed) = true;
+          // Raise an invisible full-screen shield ABOVE all widgets:
+          // absorbs every tap while dimmed so a wake tap can never
+          // trigger STAY/AWAY/numpad underneath.
+          lv_obj_add_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
+          auto call = id(backlight).turn_on();
+          call.set_brightness(0.15);
+          call.set_transition_length(1500);
+          call.perform();
+          id(check_wifi_and_show_page).execute();
 
   - id: update_wifi_bars
     then:
@@ -632,11 +674,5 @@ interval:
     then:
       - lambda: |-
           if (millis() - id(last_touch) > 30000) {
-            auto call = id(backlight).turn_on();
-            call.set_brightness(0.15);
-            call.set_transition_length(1500);
-            call.perform();
-
-            // Security: Reset to main status when dimming
-            id(check_wifi_and_show_page).execute();
+            id(screen_dim).execute();     // includes one-time security page reset
           }

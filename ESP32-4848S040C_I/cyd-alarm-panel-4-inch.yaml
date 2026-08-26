@@ -126,6 +126,7 @@ touchscreen:
     id: my_touchscreen
     display: my_display
     on_touch:
+      - script.execute: screen_wake
       - lambda: id(last_touch) = millis();
       - light.turn_on:
           id: backlight

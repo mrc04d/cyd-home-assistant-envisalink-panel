@@ -116,6 +116,7 @@ touchscreen:
       mirror_x: true
       mirror_y: true
     on_touch:
+      - script.execute: screen_wake
       - lambda: id(last_touch) = millis();
       - light.turn_on:
           id: backlight
