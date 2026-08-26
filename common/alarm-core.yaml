@@ -28,6 +28,7 @@ substitutions:
   error_red: "0xD94A4A"
   info_blue: "0x227EE6"
   # ---- timing defaults (override in device shell if ever needed) ----
+  grace_period_ms: "10000"
   pin_length: "4"
   exit_delay_s: "30"
   entry_delay_s: "15"
