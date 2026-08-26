@@ -624,7 +624,7 @@ script:
       duration_ms: int
     then:
       - switch.turn_on: buzzer
-      - delay: !lambda 'return std::max(duration_ms, 1);'
+      - delay: !lambda 'return std::min(std::max(duration_ms, 20), 600);'
       - switch.turn_off: buzzer
   - id: fx_alarm_visual
     parameters:

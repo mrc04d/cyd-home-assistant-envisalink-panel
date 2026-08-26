@@ -230,6 +230,9 @@ script:
 
           id(pin_code) += digit;
 
+          // Digit tick feedback
+          id(fx_buzzer)->execute(50);
+
           // Auto-submit when the code reaches its configured length;
           // OK button still allows variable-length codes. CLR remains
           // usable until submit; disarm_pending locks the keypad during
@@ -644,6 +647,14 @@ interval:
             char buf[40];
             snprintf(buf, sizeof(buf), "%s - %us", base.c_str(), (unsigned)remain);
             lv_label_set_text(id(status_label), buf);
+          }
+
+          // Triggered-state blink (both displays): toggle status colour 1Hz
+          static bool blink_on = false;
+          if (id(alarm_state).state == "triggered") {
+            blink_on = !blink_on;
+            uint32_t c = blink_on ? ${error_red} : ${card_bg};
+            lv_obj_set_style_text_color(id(status_label), lv_color_hex(c), 0);
           }
 
   - interval: 10s
