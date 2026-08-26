@@ -320,8 +320,9 @@ script:
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
-            id(buzzer).turn_on();
           }
+
+          id(fx_alarm_visual)->execute(state == "triggered");
 
           lv_label_set_text(id(status_label), display_text);
           lv_obj_set_style_text_color(id(status_label), lv_color_hex(text_color), 0);
@@ -345,10 +346,6 @@ script:
             lv_obj_clear_flag(id(cancel_btn), LV_OBJ_FLAG_HIDDEN);
           } else {
             lv_obj_add_flag(id(cancel_btn), LV_OBJ_FLAG_HIDDEN);
-          }
-
-          if (state != "triggered") {
-            id(buzzer).turn_off();
           }
       - if:
           condition:
