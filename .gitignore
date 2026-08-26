@@ -1,0 +1,5 @@
+.superpowers/
+secrets.yaml
+.esphome/
+__pycache__/
+*.pyc
