@@ -1,0 +1,434 @@
+# =============================================================================
+# Shared alarm panel logic - imported by device shells via packages.
+#
+# WIDGET-ID CONTRACT - importing device layouts MUST define widgets with ids:
+#   time_label, wifi_bar1..4, status_card, status_label,
+#   stay_btn, away_btn, cancel_btn, disarm_btn,
+#   pin_display, pin_mask, clr_back_label, clr_back_btn, api_badge
+#
+# HOOK CONTRACT - importing device layouts MUST define scripts:
+#   fx_buzzer(duration_ms: int)   - audible feedback (no-op ok)
+#   fx_alarm_visual(active: bool) - triggered-state indication
+# =============================================================================
+
+substitutions:
+  # ---- shared palette / neutrals (override in device shell if ever needed) ----
+  button_blue: "0x227EE6"
+  button_blue_pressed: "0x185DB0"
+  button_grey: "0x3C3C3C"
+  button_grey_pressed: "0x555555"
+  button_green: "0x71CC2E"
+  button_green_pressed: "0x5AAA24"
+  button_red: "0xD94A4A"
+  bg_dark: "0x0D1117"
+  card_bg: "0x161B22"
+  text_dim: "0x8B949E"
+  border_idle: "0x30363D"
+  ok_green: "0x71CC2E"
+  error_red: "0xD94A4A"
+  info_blue: "0x227EE6"
+
+esphome:
+  on_boot:
+    priority: 600
+    then:
+      - light.turn_on:
+          id: backlight
+          brightness: 0.85
+          transition_length: 800ms
+      - delay: 500ms
+      - script.execute: check_wifi_and_show_page
+      - delay: 100ms
+      - script.execute: update_status
+      - script.execute: update_wifi_bars
+      - script.execute: refresh_pin_display
+
+api:
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+
+# =============================================================================
+# WiFi Configuration
+# =============================================================================
+wifi:
+  # Uncomment below to hardcode WiFi credentials
+  # ssid: !secret wifi_ssid
+  # password: !secret wifi_password
+
+  # Fallback/Setup AP - connects to this if no WiFi configured or connection fails
+  ap:
+    ssid: "${friendly_name} Setup"
+    password: "configme123"
+
+  reboot_timeout: 0s
+
+captive_portal:
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: ${timezone}
+    servers:
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+      - 2.pool.ntp.org
+
+# =========================
+# GLOBALS
+# =========================
+globals:
+  - id: last_touch
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: pin_code
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: arming_started
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: disarm_pending
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+# =========================
+# HOME ASSISTANT ENTITIES
+# =========================
+text_sensor:
+  - platform: homeassistant
+    id: alarm_state
+    entity_id: ${alarm_entity}
+    on_value:
+      - script.execute: update_status
+
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      id: wifi_ip
+    ssid:
+      name: "Connected SSID"
+      id: wifi_ssid_info
+
+# =========================
+# SCRIPTS & LOGIC
+# =========================
+script:
+  - id: check_wifi_and_show_page
+    then:
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - lvgl.page.show: main_page
+          else:
+            - lvgl.page.show: wifi_setup_page
+
+  - id: open_numpad
+    then:
+      - lambda: |-
+          id(pin_code).clear();
+          id(disarm_pending) = false;
+      - script.execute: refresh_pin_display
+      - lvgl.page.show: numpad_page
+
+  - id: refresh_pin_display
+    then:
+      - lambda: |-
+          std::string masked = "";
+          for (size_t i = 0; i < id(pin_code).length(); i++) {
+            if (!masked.empty()) masked += " ";
+            masked += "*";
+          }
+
+          if (id(pin_code).empty()) {
+            lv_label_set_text(id(pin_display), "ENTER PIN");
+            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${text_dim}), 0);
+            lv_label_set_text(id(pin_mask), "");
+            lv_label_set_text(id(clr_back_label), "BACK");
+          } else {
+            lv_label_set_text(id(pin_display), "CODE");
+            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${text_dim}), 0);
+            lv_label_set_text(id(pin_mask), masked.c_str());
+            lv_label_set_text(id(clr_back_label), "CLR");
+          }
+
+  - id: handle_clr_back
+    then:
+      - if:
+          condition:
+            lambda: 'return id(disarm_pending);'
+          then:
+            - logger.log: "Ignoring CLR/BACK while disarm pending"
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(pin_code).empty();'
+                then:
+                  - logger.log: "BACK pressed"
+                  - lvgl.page.show: main_page
+                else:
+                  - logger.log: "CLR pressed"
+                  - lambda: 'id(pin_code).clear();'
+                  - script.execute: refresh_pin_display
+
+  - id: add_pin_digit
+    parameters:
+      digit: string
+    then:
+      - lambda: |-
+          if (id(disarm_pending)) {
+            return;
+          }
+
+          if (id(pin_code).length() >= 8) {
+            lv_label_set_text(id(pin_display), "MAX LENGTH");
+            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${error_red}), 0);
+            return;
+          }
+
+          id(pin_code) += digit;
+
+          std::string masked = "";
+          for (size_t i = 0; i < id(pin_code).length(); i++) {
+            if (!masked.empty()) masked += " ";
+            masked += "*";
+          }
+
+          lv_label_set_text(id(pin_display), "CODE");
+          lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${text_dim}), 0);
+          lv_label_set_text(id(pin_mask), masked.c_str());
+          lv_label_set_text(id(clr_back_label), "CLR");
+
+  - id: handle_cancel
+    then:
+      - logger.log: "Cancel pressed - showing numpad"
+      - script.execute: open_numpad
+
+  - id: send_disarm
+    then:
+      - if:
+          condition:
+            lambda: 'return id(disarm_pending);'
+          then:
+            - logger.log: "Disarm already in progress"
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(pin_code).length() < 4;'
+                then:
+                  - lambda: |-
+                      lv_label_set_text(id(pin_display), "INVALID");
+                      lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${error_red}), 0);
+                      lv_label_set_text(id(pin_mask), "MIN 4 DIGITS");
+                  - delay: 1000ms
+                  - script.execute: refresh_pin_display
+                else:
+                  - lambda: |-
+                      id(disarm_pending) = true;
+                      lv_label_set_text(id(pin_display), "CHECKING...");
+                      lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${info_blue}), 0);
+                  - homeassistant.action:
+                      action: alarm_control_panel.alarm_disarm
+                      data:
+                        entity_id: ${alarm_entity}
+                        code: !lambda 'return id(pin_code);'
+                  - delay: 2500ms
+                  - if:
+                      condition:
+                        lambda: 'return id(alarm_state).state == "disarmed";'
+                      then:
+                        - lambda: |-
+                            id(pin_code).clear();
+                            id(disarm_pending) = false;
+                            lv_label_set_text(id(pin_display), "DISARMED");
+                            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${ok_green}), 0);
+                            lv_label_set_text(id(pin_mask), "");
+                            lv_label_set_text(id(clr_back_label), "BACK");
+                        - delay: 500ms
+                        - lvgl.page.show: main_page
+                      else:
+                        - lambda: |-
+                            id(pin_code).clear();
+                            id(disarm_pending) = false;
+                            lv_label_set_text(id(pin_display), "WRONG CODE");
+                            lv_obj_set_style_text_color(id(pin_display), lv_color_hex(${error_red}), 0);
+                            lv_label_set_text(id(pin_mask), "");
+                            lv_label_set_text(id(clr_back_label), "BACK");
+                        - delay: 1200ms
+                        - script.execute: refresh_pin_display
+
+  - id: update_status
+    then:
+      - lambda: |-
+          std::string state = id(alarm_state).state;
+          const char* display_text = "UNKNOWN";
+          uint32_t text_color = 0xFFFFFF;
+          uint32_t card_border = ${border_idle};
+          bool show_arm_buttons = false;
+          bool show_disarm_button = false;
+          bool show_cancel_button = false;
+
+          if (state == "disarmed") {
+            display_text = "READY";
+            text_color = ${ok_green};
+            card_border = ${ok_green};
+            show_arm_buttons = true;
+            show_disarm_button = false;
+            show_cancel_button = false;
+          }
+          else if (state == "armed_home") {
+            display_text = "STAY ARMED";
+            text_color = 0x0FC4F1;
+            card_border = 0x0FC4F1;
+            show_arm_buttons = false;
+            show_disarm_button = true;
+            show_cancel_button = false;
+          }
+          else if (state == "armed_away") {
+            display_text = "AWAY ARMED";
+            text_color = 0x3C4CE7;
+            card_border = 0x3C4CE7;
+            show_arm_buttons = false;
+            show_disarm_button = true;
+            show_cancel_button = false;
+          }
+          else if (state == "arming") {
+            display_text = "EXIT DELAY";
+            text_color = ${info_blue};
+            card_border = ${info_blue};
+            show_arm_buttons = false;
+            show_disarm_button = false;
+            show_cancel_button = true;
+          }
+          else if (state == "pending") {
+            display_text = "ENTRY DELAY";
+            text_color = ${info_blue};
+            card_border = ${info_blue};
+            show_arm_buttons = false;
+            show_disarm_button = true;
+            show_cancel_button = false;
+          }
+          else if (state == "triggered") {
+            display_text = "ALARM!";
+            text_color = 0x3C4CE7;
+            card_border = 0x3C4CE7;
+            show_arm_buttons = false;
+            show_disarm_button = true;
+            show_cancel_button = false;
+            id(buzzer).turn_on();
+          }
+
+          lv_label_set_text(id(status_label), display_text);
+          lv_obj_set_style_text_color(id(status_label), lv_color_hex(text_color), 0);
+          lv_obj_set_style_border_color(id(status_card), lv_color_hex(card_border), 0);
+
+          if (show_arm_buttons) {
+            lv_obj_clear_flag(id(stay_btn), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(id(away_btn), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_add_flag(id(stay_btn), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(away_btn), LV_OBJ_FLAG_HIDDEN);
+          }
+
+          if (show_disarm_button) {
+            lv_obj_clear_flag(id(disarm_btn), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_add_flag(id(disarm_btn), LV_OBJ_FLAG_HIDDEN);
+          }
+
+          if (show_cancel_button) {
+            lv_obj_clear_flag(id(cancel_btn), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_add_flag(id(cancel_btn), LV_OBJ_FLAG_HIDDEN);
+          }
+
+          if (state != "triggered") {
+            id(buzzer).turn_off();
+          }
+      - if:
+          condition:
+            lambda: 'return id(alarm_state).state == "disarmed";'
+          then:
+            - lambda: |-
+                id(pin_code).clear();
+                id(disarm_pending) = false;
+            - script.execute: refresh_pin_display
+            - lvgl.page.show: main_page
+
+  - id: update_wifi_bars
+    then:
+      - lambda: |-
+          float signal = id(wifi_signal_db).state;
+
+          uint32_t color_on = ${ok_green};
+          uint32_t color_off = ${button_grey};
+
+          int bars = 0;
+          if (!isnan(signal)) {
+            if (signal > -50) bars = 4;
+            else if (signal > -60) bars = 3;
+            else if (signal > -70) bars = 2;
+            else if (signal > -80) bars = 1;
+            else bars = 0;
+          }
+
+          lv_obj_set_style_bg_color(id(wifi_bar1), lv_color_hex(bars >= 1 ? color_on : color_off), 0);
+          lv_obj_set_style_bg_color(id(wifi_bar2), lv_color_hex(bars >= 2 ? color_on : color_off), 0);
+          lv_obj_set_style_bg_color(id(wifi_bar3), lv_color_hex(bars >= 3 ? color_on : color_off), 0);
+          lv_obj_set_style_bg_color(id(wifi_bar4), lv_color_hex(bars >= 4 ? color_on : color_off), 0);
+
+# =============================================================================
+# Intervals
+# =============================================================================
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          auto time = id(sntp_time).now();
+          if (time.is_valid()) {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%02d:%02d", time.hour, time.minute);
+            lv_label_set_text(id(time_label), buf);
+          }
+
+  - interval: 10s
+    then:
+      - script.execute: update_wifi_bars
+
+  - interval: 5s
+    then:
+      - lambda: |-
+          // Standard LVGL check using raw pointers
+          lv_obj_t *active_screen = lv_scr_act();
+
+          // Check if status_label is on the current screen
+          bool on_main_page = (lv_obj_get_screen(id(status_label)) == active_screen);
+
+          uint32_t idle_time = millis() - id(last_touch);
+
+          if (!on_main_page) {
+            // Stay on Numpad unless idle for 30s
+            if (idle_time > 30000) {
+              id(check_wifi_and_show_page).execute();
+            }
+          } else {
+            id(check_wifi_and_show_page).execute();
+          }
+
+  - interval: 8s
+    then:
+      - lambda: |-
+          if (millis() - id(last_touch) > 30000) {
+            auto call = id(backlight).turn_on();
+            call.set_brightness(0.15);
+            call.set_transition_length(1500);
+            call.perform();
+
+            // Security: Reset to main status when dimming
+            id(check_wifi_and_show_page).execute();
+          }
