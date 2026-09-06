@@ -11,7 +11,7 @@ This project turns an inexpensive display (~$15–$30) into a fully functional a
 The configuration uses ESPHome's `packages` feature to share logic between the two supported panels:
 
 - **`common/alarm-core.yaml`** — All shared logic: WiFi, API, OTA, time, globals, sensors, scripts, intervals, and the LVGL event handlers. Edit logic once here.
-- **Device shells** (`cyd-alarm-panel.yaml`, `ESP32-4848S040C_I/cyd-alarm-panel-4-inch.yaml`) — Thin hardware + LVGL layout files that import the core.
+- **Device shells** (`cyd-2.8inch/cyd-alarm-panel.yaml`, `guition-4inch/cyd-alarm-panel-4-inch.yaml`) — Thin hardware + LVGL layout files that import the core.
 
 ### Widget-ID Contract
 
@@ -100,7 +100,7 @@ However, it can be easily adapted for:
 | Display | ILI9341 SPI LCD (320x240) |
 | Touch | XPT2046 Resistive |
 | MCU | ESP32-WROOM-32 |
-| Config | `cyd-alarm-panel.yaml` |
+| Config | `cyd-2.8inch/cyd-alarm-panel.yaml` |
 | Buzzer | GPIO 26 (active) |
 | Purchase | Search "ESP32 2.8 inch CYD" on AliExpress |
 
@@ -111,14 +111,38 @@ However, it can be easily adapted for:
 | Display | ST7701S RGB LCD (480x480, 4.0") |
 | Touch | GT911 Capacitive (I2C, polling mode) |
 | MCU | ESP32-S3 with 16MB Flash, 8MB PSRAM (Octal) |
-| Config | `ESP32-4848S040C_I/cyd-alarm-panel-4-inch.yaml` |
+| Config | `guition-4inch/cyd-alarm-panel-4-inch.yaml` |
 | Purchase | [AliExpress](https://www.aliexpress.com/item/1005008797813823.html) |
+
+---
+
+## Config Variants
+
+Each board has a **main** config and optional **variant** configs with additional features. All variants import the same `common/alarm-core.yaml`.
+
+### CYD 2.8"
+
+| Config | Features |
+|--------|----------|
+| `cyd-2.8inch/cyd-alarm-panel.yaml` | Standard alarm panel |
+| `cyd-2.8inch/cyd-alarm-panel-wifi-status.yaml` | Adds WiFi connecting status page |
+
+### Guition 4"
+
+| Config | Features |
+|--------|----------|
+| `guition-4inch/cyd-alarm-panel-4-inch.yaml` | Standard alarm panel |
+| `guition-4inch/cyd-alarm-panel-4-inch-wifi-status.yaml` | Adds WiFi connecting status page + dim fix |
+| `guition-4inch/cyd-alarm-panel-4-inch-wifi-overlay.yaml` | Adds WiFi overlay toggle + 20MHz PCLK |
+| `guition-4inch/cyd-alarm-panel-4-inch-wifi-overlay-and-status.yaml` | All features: status page + overlay + dim fix + 20MHz PCLK |
+
+> **Tip:** Start with the main config for your board. Only use a variant if you specifically need its extra features.
 
 ---
 
 ## Hardware Pinouts
 
-### ESP32-4848S040C_I
+### Guition 4" (ESP32-4848S040C_I)
 
 | Function | GPIO | Notes |
 |----------|------|-------|
@@ -176,8 +200,8 @@ However, it can be easily adapted for:
 
 ### Step 1: Basic Display Test
 First, verify your CYD is working with the basic test config:
-- **For CYD 2.8":** Use `basic-config-test.yaml`.
-- **For Guition 4":** Use `ESP32-4848S040C_I/basic-config-test.yaml`.
+- **For CYD 2.8":** Use `cyd-2.8inch/basic-config-test.yaml`.
+- **For Guition 4":** Use `guition-4inch/basic-config-test.yaml`.
 
 ### Step 2: Touchscreen Calibration
 Follow the [CYD for Beginners](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display) guide to calibrate the touchscreen if needed.
@@ -192,7 +216,7 @@ cp secrets.yaml.example secrets.yaml
 Then edit `secrets.yaml` with your values. **NEVER commit `secrets.yaml` to git.**
 
 ### Step 4: Install Alarm Panel
-1. Install `cyd-alarm-panel.yaml` or `ESP32-4848S040C_I/cyd-alarm-panel-4-inch.yaml` to your device.
+1. Install `cyd-2.8inch/cyd-alarm-panel.yaml` or `guition-4inch/cyd-alarm-panel-4-inch.yaml` to your device.
 2. Edit the `substitutions` at the top of the YAML file.
 3. Flash the firmware via USB once (required after changing API encryption key).
 4. Perform future updates via OTA.
@@ -384,12 +408,12 @@ Flash a test config to verify your display works before installing the alarm pan
 
 **For CYD 2.8":**
 ```bash
-esphome run basic-config-test.yaml
+esphome run cyd-2.8inch/basic-config-test.yaml
 ```
 
 **For Guition 4":**
 ```bash
-esphome run ESP32-4848S040C_I/basic-config-test.yaml
+esphome run guition-4inch/basic-config-test.yaml
 ```
 
 If the display shows colors and responds to touch, proceed.
@@ -416,12 +440,12 @@ Flash the main alarm panel config to your device:
 
 **For CYD 2.8":**
 ```bash
-esphome run cyd-alarm-panel.yaml
+esphome run cyd-2.8inch/cyd-alarm-panel.yaml
 ```
 
 **For Guition 4":**
 ```bash
-esphome run ESP32-4848S040C_I/cyd-alarm-panel-4-inch.yaml
+esphome run guition-4inch/cyd-alarm-panel-4-inch.yaml
 ```
 
 ### 5. Configure Substitutions
@@ -466,7 +490,7 @@ Run through the [On-Device Test Checklist](#on-device-test-checklist) to confirm
 
 ### Touch not responding
 
-- Run the touchscreen calibration: `esphome run touch-screen-test-and-calibration.yaml`.
+- Run the touchscreen calibration: `esphome run cyd-2.8inch/touch-screen-test-and-calibration.yaml`.
 - For the 4" display, ensure GT911 I2C pins match your board revision.
 
 ### "HA OFFLINE" on the panel

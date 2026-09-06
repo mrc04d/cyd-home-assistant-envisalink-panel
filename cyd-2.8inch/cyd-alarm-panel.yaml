@@ -16,7 +16,7 @@ substitutions:
   timezone: "Etc/UTC"
 
 packages:
-  core: !include common/alarm-core.yaml
+  core: !include ../common/alarm-core.yaml
 
 esphome:
   name: ${device_name}
