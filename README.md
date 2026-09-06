@@ -333,6 +333,172 @@ After installation, verify the following:
 
 ---
 
+## Prerequisites
+
+Before starting, ensure you have:
+
+| Requirement | Details |
+|-------------|---------|
+| **Home Assistant** | Running installation with Supervisor or standalone |
+| **Alarm integration** | `alarm_control_panel` entity set up (Envisalink, Alarmo, Manual Alarm, etc.) |
+| **ESPHome** | Installed in HA (Settings → Devices & Services → ESPHome) or standalone CLI |
+| **Hardware** | CYD 2.8" (ESP32-2432S028R) or Guition 4" (ESP32-4848S040C_I) |
+| **USB cable** | For initial flashing |
+| **Network** | 2.4GHz WiFi (ESP32 does not support 5GHz) |
+
+### Setting Up Your Alarm Entity
+
+If you don't already have an alarm control panel in Home Assistant:
+
+1. Go to **Settings → Devices & Services → Add Integration**.
+2. Search for your alarm system (e.g., **Envisalink**, **Alarmo**).
+3. Follow the integration setup wizard.
+4. After setup, note the entity ID (e.g., `alarm_control_panel.home_alarm_partition_1`).
+
+### Installing ESPHome
+
+**Via HA add-on (recommended):**
+1. Go to **Settings → Add-ons → Add-on Store**.
+2. Search for **ESPHome** and install it.
+3. Start the add-on and open the web UI.
+
+**Standalone:**
+```bash
+pip install esphome
+```
+
+---
+
+## Quick Start
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/mrc04d/cyd-home-assistant-envisalink-panel.git
+cd cyd-home-assistant-envisalink-panel
+```
+
+### 2. Basic Display Test
+
+Flash a test config to verify your display works before installing the alarm panel.
+
+**For CYD 2.8":**
+```bash
+esphome run basic-config-test.yaml
+```
+
+**For Guition 4":**
+```bash
+esphome run ESP32-4848S040C_I/basic-config-test.yaml
+```
+
+If the display shows colors and responds to touch, proceed.
+
+### 3. Install Secrets
+
+Copy the example secrets file and fill in your values:
+
+```bash
+cp secrets.yaml.example secrets.yaml
+```
+
+Edit `secrets.yaml` with your WiFi credentials and a generated API encryption key:
+
+```bash
+openssl rand -base64 32
+```
+
+> **Never commit `secrets.yaml` to git.**
+
+### 4. Install the Alarm Panel
+
+Flash the main alarm panel config to your device:
+
+**For CYD 2.8":**
+```bash
+esphome run cyd-alarm-panel.yaml
+```
+
+**For Guition 4":**
+```bash
+esphome run ESP32-4848S040C_I/cyd-alarm-panel-4-inch.yaml
+```
+
+### 5. Configure Substitutions
+
+Edit the top of the YAML file before flashing:
+
+```yaml
+substitutions:
+  device_name: "cyd-alarm"
+  friendly_name: "CYD Alarm Panel"
+  alarm_entity: "alarm_control_panel.home_alarm_partition_1"
+  grace_period_ms: "10000"
+  pin_length: "4"
+  exit_delay_s: "30"
+  entry_delay_s: "15"
+  arm_timeout_s: "20"
+  timezone: "Etc/UTC"
+```
+
+### 6. Enable Home Assistant Actions
+
+After the device appears in ESPHome:
+
+1. Go to **Settings → Devices & Services**.
+2. Find the **ESPHome** integration.
+3. Click **Configure** on your CYD device.
+4. Enable **"Allow the device to perform Home Assistant actions."**
+
+### 7. Verify Installation
+
+Run through the [On-Device Test Checklist](#on-device-test-checklist) to confirm everything works.
+
+---
+
+## Troubleshooting
+
+### Display is blank or shows garbage
+
+- Ensure you flashed the correct config for your hardware (2.8" vs 4").
+- Check the USB cable is data-capable (some are power-only).
+- Try holding the **BOOT** button while connecting USB to enter flash mode.
+
+### Touch not responding
+
+- Run the touchscreen calibration: `esphome run touch-screen-test-and-calibration.yaml`.
+- For the 4" display, ensure GT911 I2C pins match your board revision.
+
+### "HA OFFLINE" on the panel
+
+- Check that the ESPHome integration in HA shows the device as **connected**.
+- Verify `api_encryption_key` matches between `secrets.yaml` and the device.
+- Check your firewall allows port 6053 (ESPHome API).
+
+### "CANCEL FAILED" during grace period
+
+- Your alarm integration must support code-less disarm from the HA UI.
+- Test disarming from the HA dashboard without entering a PIN.
+- If unsupported, disable grace cancel: `grace_period_ms: "0"`.
+
+### "WRONG CODE" after correct PIN
+
+- Check that `alarm_entity` points to the correct `alarm_control_panel` entity.
+- Verify the PIN format matches your alarm system (some systems require `#` suffix).
+
+### Device won't connect to WiFi
+
+- Safe mode engages after 4 failed boot attempts.
+- Connect to the fallback AP (`${friendly_name} Setup`) and use the captive portal.
+- If safe mode doesn't engage, flash via USB with corrected credentials.
+
+### OTA update fails
+
+- Ensure the device and your computer are on the same network.
+- Check that the `ota_password` in `secrets.yaml` hasn't changed since the last USB flash.
+
+---
+
 ## Credits
 - [CYD for Beginners](https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display)
 - [ESPHome](https://esphome.io/)
