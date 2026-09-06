@@ -124,17 +124,17 @@ Each board has a **main** config and optional **variant** configs with additiona
 
 | Config | Features |
 |--------|----------|
-| `cyd-2.8inch/cyd-alarm-panel.yaml` | Standard alarm panel |
-| `cyd-2.8inch/cyd-alarm-panel-wifi-status.yaml` | Adds WiFi connecting status page |
+| `cyd-2.8inch/cyd-alarm-panel.yaml` | Standard alarm panel + WiFi overlay (tap signal bars) |
+| `cyd-2.8inch/cyd-alarm-panel-wifi-status.yaml` | Adds WiFi setup + connecting status pages |
 
 ### Guition 4"
 
 | Config | Features |
 |--------|----------|
 | `guition-4inch/cyd-alarm-panel-4-inch.yaml` | Standard alarm panel |
-| `guition-4inch/cyd-alarm-panel-4-inch-wifi-status.yaml` | Adds WiFi connecting status page + dim fix |
+| `guition-4inch/cyd-alarm-panel-4-inch-wifi-status.yaml` | Adds WiFi setup + connecting status pages + dim fix |
 | `guition-4inch/cyd-alarm-panel-4-inch-wifi-overlay.yaml` | Adds WiFi overlay toggle + 20MHz PCLK |
-| `guition-4inch/cyd-alarm-panel-4-inch-wifi-overlay-and-status.yaml` | All features: status page + overlay + dim fix + 20MHz PCLK |
+| `guition-4inch/cyd-alarm-panel-4-inch-wifi-overlay-and-status.yaml` | All features: status pages + overlay + dim fix + 20MHz PCLK |
 
 > **Tip:** Start with the main config for your board. Only use a variant if you specifically need its extra features.
 
@@ -313,10 +313,10 @@ Static IPs are intentionally **NOT supported in the shared core**. A wrong `manu
 - **DISARM**: Opens PIN pad (when armed).
 
 ### PIN Pad
-- **Digits 0-9**: Enter PIN (auto-submits at configured length).
+- **Digits 0-9**: Enter PIN. When you reach `pin_length` digits (default 4), the panel auto-submits — you do not need to press **OK**.
+- **OK**: Manual submit (use only if your alarm system requires a longer code than `pin_length`).
 - **CLR**: Clear entry.
 - **BACK**: Return to main screen.
-- **OK**: Submit PIN manually.
 
 ### Grace-Period Cancel
 Press **CANCEL** during the exit delay to disarm without entering a PIN. Works only within the configured grace period (default 10s).
@@ -327,6 +327,19 @@ After 30s of inactivity, the screen dims. The **first tap wakes the screen WITHO
 ### HA Connection Badge
 - **Green**: API connected.
 - **Red**: API disconnected (check HA/network).
+
+### WiFi Overlay
+Tap the **WiFi signal bars** (top-right corner, next to the HA badge) to toggle a dim overlay showing:
+- Connected SSID
+- IP address
+- Signal strength (dBm)
+
+Tap the overlay again to close it.
+
+### WiFi Status Pages
+Some config variants add dedicated pages for the WiFi setup flow:
+- **wifi-setup page**: Shown when no WiFi is configured. Displays the fallback AP name and portal instructions.
+- **wifi-connecting page**: Shown during connection. Displays the target SSID and "Please wait..."
 
 ---
 
