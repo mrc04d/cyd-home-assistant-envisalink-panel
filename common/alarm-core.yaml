@@ -27,11 +27,11 @@ substitutions:
   ok_green: "0x71CC2E"
   error_red: "0xD94A4A"
   info_blue: "0x227EE6"
+  idle_brightness: "0.15"
   # ---- timing defaults (override in device shell if ever needed) ----
-  grace_period_ms: "10000"
+  grace_period_s: "10"
   pin_length: "4"
   exit_delay_s: "30"
-  entry_delay_s: "15"
   arm_timeout_s: "20"
 
 esphome:
@@ -60,6 +60,9 @@ ota:
 
 safe_mode:
   num_attempts: 4
+
+web_server:
+  port: 80
 
 # =============================================================================
 # WiFi Configuration
@@ -129,6 +132,10 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+  - id: wifi_overlay_visible
+    type: bool
+    restore_value: no
+    initial_value: 'false'
 
 # =========================
 # HOME ASSISTANT ENTITIES
@@ -148,19 +155,146 @@ text_sensor:
       name: "Connected SSID"
       id: wifi_ssid_info
 
+sensor:
+  - platform: homeassistant
+    entity_id: ${alarm_entity}
+    attribute: delay_before_arm
+    id: exit_delay_sensor
+    on_value:
+      - script.execute: update_status
+
+# =========================
+# RUNTIME SETTINGS (editable via web UI)
+# =========================
+number:
+  - platform: template
+    id: idle_brightness_num
+    name: "Idle Brightness"
+    min_value: 0.01
+    max_value: 1.0
+    step: 0.01
+    initial_value: ${idle_brightness}
+    restore_value: true
+    unit_of_measurement: "%"
+    icon: "mdi:brightness-6"
+    mode: box
+    optimistic: true
+
+  - platform: template
+    id: screen_dim_timeout_num
+    name: "Screen Dim Timeout"
+    min_value: 10
+    max_value: 120
+    step: 5
+    initial_value: "30"
+    restore_value: true
+    unit_of_measurement: "s"
+    icon: "mdi:timer-outline"
+    optimistic: true
+
+  - platform: template
+    id: grace_period_s_num
+    name: "Grace Period"
+    min_value: 0
+    max_value: 60
+    step: 1
+    initial_value: ${grace_period_s}
+    restore_value: true
+    unit_of_measurement: "s"
+    icon: "mdi:timer"
+    optimistic: true
+
+  - platform: template
+    id: exit_delay_s_num
+    name: "Exit Delay"
+    min_value: 0
+    max_value: 120
+    step: 1
+    initial_value: ${exit_delay_s}
+    restore_value: true
+    unit_of_measurement: "s"
+    icon: "mdi:timer-sand"
+    optimistic: true
+
+  - platform: template
+    id: arm_timeout_s_num
+    name: "Arm Timeout"
+    min_value: 0
+    max_value: 120
+    step: 1
+    initial_value: ${arm_timeout_s}
+    restore_value: true
+    unit_of_measurement: "s"
+    icon: "mdi:timer-outline"
+    optimistic: true
+
 # =========================
 # SCRIPTS & LOGIC
 # =========================
 script:
   - id: check_wifi_and_show_page
     then:
-      - if:
-          condition:
-            wifi.connected:
-          then:
-            - lvgl.page.show: main_page
-          else:
-            - lvgl.page.show: wifi_setup_page
+      - lambda: |-
+          using namespace esphome::wifi;
+          if (global_wifi_component->is_connected()) {
+            id(my_lvgl).show_page(main_page->index, LV_SCREEN_LOAD_ANIM_NONE, 50);
+          } else if (global_wifi_component->has_sta()) {
+            std::string ssid = global_wifi_component->get_sta().get_ssid().c_str();
+            if (ssid.empty()) {
+              ssid = "configured network";
+            }
+            lv_label_set_text(id(wifi_connecting_ssid_label), ssid.c_str());
+            id(my_lvgl).show_page(wifi_connecting_page->index, LV_SCREEN_LOAD_ANIM_NONE, 50);
+          } else {
+            id(my_lvgl).show_page(wifi_setup_page->index, LV_SCREEN_LOAD_ANIM_NONE, 50);
+          }
+
+  - id: toggle_wifi_overlay
+    then:
+      - lambda: |-
+          if (id(wifi_overlay_visible)) {
+            id(wifi_overlay_visible) = false;
+            lv_obj_clean(lv_layer_top());
+            lv_obj_add_flag(lv_layer_top(), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
+          } else {
+            id(wifi_overlay_visible) = true;
+            lv_obj_t *top_layer = lv_layer_top();
+            lv_obj_clean(top_layer);
+            lv_obj_remove_flag(top_layer, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(top_layer, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_t *overlay = lv_obj_create(top_layer);
+            lv_obj_set_size(overlay, LV_HOR_RES, LV_VER_RES);
+            lv_obj_set_style_bg_color(overlay, lv_color_hex(0x000000), LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(overlay, LV_OPA_80, LV_PART_MAIN);
+            lv_obj_set_style_border_width(overlay, 0, LV_PART_MAIN);
+            lv_obj_set_style_radius(overlay, 0, LV_PART_MAIN);
+            lv_obj_t *ip_label = lv_label_create(overlay);
+            std::string ip = id(wifi_ip).state;
+            if (ip.empty()) ip = "N/A";
+            std::string ip_text = "IP: " + ip;
+            lv_label_set_text(ip_label, ip_text.c_str());
+            lv_obj_set_style_text_color(ip_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+            lv_obj_align(ip_label, LV_ALIGN_TOP_MID, 0, 30);
+            lv_obj_t *ssid_label = lv_label_create(overlay);
+            std::string ssid = id(wifi_ssid_info).state;
+            if (ssid.empty()) ssid = "N/A";
+            std::string ssid_text = "SSID: " + ssid;
+            lv_label_set_text(ssid_label, ssid_text.c_str());
+            lv_obj_set_style_text_color(ssid_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+            lv_obj_align(ssid_label, LV_ALIGN_TOP_MID, 0, 80);
+            lv_obj_t *sig_label = lv_label_create(overlay);
+            float signal = id(wifi_signal_db).state;
+            char sig_buf[32];
+            snprintf(sig_buf, sizeof(sig_buf), "Signal: %.0f dBm", signal);
+            lv_label_set_text(sig_label, sig_buf);
+            lv_obj_set_style_text_color(sig_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+            lv_obj_align(sig_label, LV_ALIGN_TOP_MID, 0, 130);
+            lv_obj_t *hint = lv_label_create(overlay);
+            lv_label_set_text(hint, "Tap to close");
+            lv_obj_set_style_text_color(hint, lv_color_hex(0x8B949E), LV_PART_MAIN);
+            lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -30);
+          }
 
   - id: open_numpad
     then:
@@ -378,8 +512,8 @@ script:
             - if:
                 condition:
                   lambda: |-
-                    return id(alarm_state).state == "arming"
-                        && (millis() - id(arming_started)) < ${grace_period_ms};
+                     return id(alarm_state).state == "arming"
+                        && (millis() - id(arming_started)) < (uint32_t)id(grace_period_s_num).state * 1000;
                 then:
                   - logger.log: "Grace period cancel - disarming without code"
                   - lambda: |-
@@ -481,8 +615,12 @@ script:
             show_arm_buttons = false;
             show_disarm_button = false;
             show_cancel_button = true;
-            if (phase_changed && ${exit_delay_s} != 0)
-              id(countdown_deadline) = millis() + ${exit_delay_s} * 1000UL;
+            uint32_t exit_delay = 0;
+            if (!isnan(id(exit_delay_sensor).state))
+              exit_delay = (uint32_t)id(exit_delay_sensor).state;
+            if (exit_delay == 0) exit_delay = (uint32_t)id(exit_delay_s_num).state;
+            if (phase_changed && exit_delay != 0)
+              id(countdown_deadline) = millis() + exit_delay * 1000UL;
             id(watchdog_active) = false;
             id(last_touch) = millis();
             id(screen_wake).execute();
@@ -497,8 +635,7 @@ script:
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
-            if (phase_changed && ${entry_delay_s} != 0)
-              id(countdown_deadline) = millis() + ${entry_delay_s} * 1000UL;
+            id(countdown_deadline) = 0;
             id(watchdog_active) = false;
             id(last_touch) = millis();
             id(screen_wake).execute();
@@ -570,11 +707,11 @@ script:
     mode: restart
     then:
       - lambda: 'id(watchdog_active) = true;'
-      - delay: !lambda 'return ${arm_timeout_s} * 1000;'
+      - delay: !lambda 'return (uint32_t)id(arm_timeout_s_num).state * 1000;'
       - lambda: |-
           if (id(watchdog_active) && id(countdown_deadline) == 0
               && id(alarm_state).state == "disarmed") {
-            ESP_LOGW("watchdog", "Arm command produced no state change in %s s", "${arm_timeout_s}");
+            ESP_LOGW("watchdog", "Arm command produced no state change in %d s", (uint32_t)id(arm_timeout_s_num).state);
             lv_label_set_text(id(status_label), "CHECK PANEL");
             lv_obj_set_style_text_color(id(status_label), lv_color_hex(${error_red}), 0);
           }
@@ -597,8 +734,8 @@ script:
           // trigger STAY/AWAY/numpad underneath.
           lv_obj_add_flag(lv_layer_top(), LV_OBJ_FLAG_CLICKABLE);
           auto call = id(backlight).turn_on();
-          call.set_brightness(0.15);
-          call.set_transition_length(1500);
+          call.set_brightness(0.0);  // off until next touch
+          call.set_transition_length(500);
           call.perform();
           id(check_wifi_and_show_page).execute();
 
@@ -642,7 +779,7 @@ interval:
           // Wraparound-safe: unsigned subtraction stays correct across
           // millis() rollover (~49.7 days); cap rejects bogus huge values.
           if (id(countdown_deadline) != 0) {
-            std::string base = (id(alarm_state).state == "arming") ? "EXIT DELAY" : "ENTRY DELAY";
+            std::string base = "EXIT DELAY";
             uint32_t remain = (uint32_t)(id(countdown_deadline) - millis()) / 1000UL;
             if (remain > 3600UL) remain = 0;
             char buf[40];
@@ -685,7 +822,7 @@ interval:
 
           if (!on_main_page) {
             // Stay on Numpad unless idle for 30s
-            if (idle_time > 30000) {
+            if (idle_time > (uint32_t)id(screen_dim_timeout_num).state * 1000) {
               id(check_wifi_and_show_page).execute();
             }
           } else {
@@ -695,6 +832,7 @@ interval:
   - interval: 8s
     then:
       - lambda: |-
-          if (millis() - id(last_touch) > 30000) {
+          if (millis() - id(last_touch) > (uint32_t)id(screen_dim_timeout_num).state * 1000) {
             id(screen_dim).execute();     // includes one-time security page reset
           }
+

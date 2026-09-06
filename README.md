@@ -44,6 +44,8 @@ Every device layout **MUST** define these scripts:
 
 ## Compatibility
 
+This project requires **ESPHome >= 2024.6** (uses `st7701s`, `ota: - platform: esphome`, and `lvgl` features).
+
 This project was developed and tested with:
 - **Envisalink integration**
 - **Single partition** configuration (Partition 1)
@@ -63,7 +65,7 @@ However, it can be easily adapted for:
 - Time Display (NTP synced)
 - PIN Code Entry with auto-submit at configured length
 - Grace Period Cancel (no-PIN cancel during exit delay)
-- Event-driven Disarm Verification (8s bounded wait)
+- Bounded-Polling Disarm Verification (8s bounded wait)
 - Exit/Entry Countdown Timers
 - Arm-failure Watchdog (CHECK PANEL alert)
 - Keypad Tones (2.8" buzzer)
@@ -83,9 +85,11 @@ However, it can be easily adapted for:
 | Disarmed | READY | Green |
 | Armed Home | STAY ARMED | Cyan |
 | Armed Away | AWAY ARMED | Blue |
+| Armed Night/Vacation/Custom Bypass | ARMED | Blue |
 | Arming | EXIT DELAY - Ns | Blue |
 | Entry Delay | ENTRY DELAY - Ns | Blue |
 | Triggered | ALARM! | Red (blinking) |
+| Unavailable/Unknown | NO SIGNAL | Blue |
 
 ## Supported Hardware
 
@@ -172,7 +176,7 @@ However, it can be easily adapted for:
 
 ### Step 1: Basic Display Test
 First, verify your CYD is working with the basic test config:
-- **For CYD 2.8":** Use `cyd-basic-test.yaml`.
+- **For CYD 2.8":** Use `basic-config-test.yaml`.
 - **For Guition 4":** Use `ESP32-4848S040C_I/basic-config-test.yaml`.
 
 ### Step 2: Touchscreen Calibration
@@ -211,7 +215,7 @@ Then edit `secrets.yaml` with your values. **NEVER commit `secrets.yaml` to git.
 | `friendly_name` | Display name | `CYD Alarm Panel` |
 | `alarm_entity` | Your HA alarm entity | `alarm_control_panel.home_alarm_partition_1` |
 | `grace_period_ms` | Cancel without PIN time (0 to disable) | `10000` |
-| `pin_length` | PIN length for auto-submit | `4` |
+| `pin_length` | PIN length for auto-submit (4-8) | `4` |
 | `exit_delay_s` | Exit delay in seconds (0 to disable countdown) | `30` |
 | `entry_delay_s` | Entry delay in seconds (0 to disable countdown) | `15` |
 | `arm_timeout_s` | Arm-failure watchdog timeout | `20` |
@@ -232,14 +236,20 @@ The following secrets are stored in `secrets.yaml` (gitignored):
 |-----|---------|------------|
 | `api_encryption_key` | Encrypts API traffic | `openssl rand -base64 32` |
 | `ota_password` | Protects OTA updates | Any strong string |
-| `wifi_ssid` | WiFi network name | Your WiFi SSID |
-| `wifi_password` | WiFi password | Your WiFi password |
+| `wifi_ssid` | WiFi network name (opt-in, uncomment in core) | Your WiFi SSID |
+| `wifi_password` | WiFi password (opt-in, uncomment in core) | Your WiFi password |
 | `ap_password` | Fallback AP password | Any strong string (8+ chars) |
+
+### Captive Portal
+The captive portal serves an unauthenticated web interface for WiFi configuration when the fallback AP is active. Ensure `ap_password` is strong (8+ chars) to prevent unauthorized reconfiguration. If you don't need on-device WiFi setup, you can disable `captive_portal:` in `common/alarm-core.yaml`.
 
 ### What Encryption Protects
 - **API encryption** prevents local network attackers from intercepting alarm commands or injecting fake states.
 - **OTA password** prevents unauthorized firmware updates.
 - **WiFi credentials** are never committed to git.
+
+### PIN Rate Limiting
+After **5 consecutive failed PIN entries**, the keypad locks for **30 seconds** to prevent brute-force attacks. This is a local-only protection — for stronger security, use a longer PIN (`pin_length: "6"`) and ensure API encryption is enabled.
 
 ---
 
@@ -307,6 +317,7 @@ After installation, verify the following:
 - [ ] Grace-cancel with HA stopped → "CANCEL FAILED" after ~6s.
 - [ ] Commissioning: confirm your Envisalink integration accepts code-less disarm (can you disarm from the HA UI without typing a code?). If not, grace cancel will always report CANCEL FAILED and should be disabled via `grace_period_ms: "0"`.
 - [ ] Wrong PIN → WRONG CODE + long buzz (2.8").
+- [ ] 5 wrong PINs → keypad locks 30s (shows "LOCKED").
 - [ ] Disarm with HA stopped → "HA OFFLINE" (not "WRONG CODE") after ~8s.
 - [ ] Correct PIN → DISARMED confirmation arrives as fast as HA responds (no fixed lag).
 - [ ] Auto-submit fires at configured length.

@@ -5,6 +5,11 @@ substitutions:
   alarm_entity: "alarm_control_panel.home_alarm_partition_1"
   # Grace period in milliseconds (10 seconds = 10000)
   grace_period_ms: "10000"
+  # PIN length for auto-submit (4-8)
+  pin_length: "4"
+  # Exit/entry delay in seconds (0 to disable countdown)
+  exit_delay_s: "30"
+  entry_delay_s: "15"
   # Change this to your timezone - examples:
   # Etc/UTC, America/New_York, Europe/London, Asia/Tokyo
   # Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
@@ -15,6 +20,7 @@ packages:
 
 esphome:
   name: ${device_name}
+  friendly_name: "CYD Alarm Panel"
 
 esp32:
   board: esp32dev
@@ -116,17 +122,25 @@ touchscreen:
       mirror_x: true
       mirror_y: true
     on_touch:
-      - script.execute: screen_wake
-      - lambda: id(last_touch) = millis();
-      - light.turn_on:
-          id: backlight
-          brightness: 1.0
-          transition_length: 300ms
+      - if:
+          condition:
+            lambda: 'return id(wifi_overlay_visible);'
+          then:
+            - script.execute: toggle_wifi_overlay
+          else:
+            - script.execute: screen_wake
+            - lambda: id(last_touch) = millis();
+            - light.turn_on:
+                id: backlight
+                brightness: 1.0
+                transition_length: 300ms
 
 # =========================
 # LVGL UI
 # =========================
 lvgl:
+lvgl:
+  id: lvgl_display
   displays:
     - my_display
   touchscreens:
@@ -180,7 +194,7 @@ lvgl:
         - label:
             align: CENTER
             y: 18
-            text: "2. Password: configme123"
+            text: "2. Password: see secrets.yaml"
             text_color: ${text_dim}
 
         - label:
@@ -243,6 +257,13 @@ lvgl:
             bg_color: ${button_grey}
             border_width: 0
 
+
+            on_press:
+              - if:
+                  condition:
+                    lambda: 'return !id(wifi_overlay_visible);'
+                  then:
+                    - script.execute: toggle_wifi_overlay
         - obj:
             id: wifi_bar2
             align: TOP_RIGHT
@@ -254,6 +275,13 @@ lvgl:
             bg_color: ${button_grey}
             border_width: 0
 
+
+            on_press:
+              - if:
+                  condition:
+                    lambda: 'return !id(wifi_overlay_visible);'
+                  then:
+                    - script.execute: toggle_wifi_overlay
         - obj:
             id: wifi_bar3
             align: TOP_RIGHT
@@ -265,6 +293,13 @@ lvgl:
             bg_color: ${button_grey}
             border_width: 0
 
+
+            on_press:
+              - if:
+                  condition:
+                    lambda: 'return !id(wifi_overlay_visible);'
+                  then:
+                    - script.execute: toggle_wifi_overlay
         - obj:
             id: wifi_bar4
             align: TOP_RIGHT
@@ -276,6 +311,13 @@ lvgl:
             bg_color: ${button_grey}
             border_width: 0
 
+
+            on_press:
+              - if:
+                  condition:
+                    lambda: 'return !id(wifi_overlay_visible);'
+                  then:
+                    - script.execute: toggle_wifi_overlay
         - obj:
             id: status_card
             align: CENTER
@@ -304,6 +346,8 @@ lvgl:
             height: 55
             radius: 12
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - logger.log: "STAY button pressed!"
               - script.execute: mark_arming_started
@@ -328,6 +372,8 @@ lvgl:
             height: 55
             radius: 12
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - logger.log: "AWAY button pressed!"
               - script.execute: mark_arming_started
@@ -351,6 +397,8 @@ lvgl:
             height: 55
             radius: 12
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute: try_grace_cancel
             widgets:
@@ -368,6 +416,8 @@ lvgl:
             height: 55
             radius: 12
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - logger.log: "DISARM button pressed - showing numpad"
               - script.execute: open_numpad
@@ -396,7 +446,7 @@ lvgl:
             id: pin_display
             align: TOP_MID
             y: 12
-            text: "ENTER PIN"
+            text: "ENTER CODE"
             text_align: CENTER
             text_color: ${text_dim}
             text_font: montserrat_16
@@ -417,6 +467,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -435,6 +487,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -453,6 +507,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -472,6 +528,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_grey}
+            pressed:
+              bg_color: ${button_grey_pressed}
             on_press:
               - script.execute: handle_clr_back
             widgets:
@@ -489,6 +547,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -507,6 +567,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -525,6 +587,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -543,6 +607,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_green}
+            pressed:
+              bg_color: ${button_green_pressed}
             on_press:
               - logger.log: "OK pressed - sending disarm"
               - script.execute: send_disarm
@@ -560,6 +626,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -578,6 +646,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -596,6 +666,8 @@ lvgl:
             height: 40
             radius: 8
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -614,6 +686,8 @@ lvgl:
             height: 32
             radius: 8
             bg_color: ${button_blue}
+            pressed:
+              bg_color: ${button_blue_pressed}
             on_press:
               - script.execute:
                   id: add_pin_digit
@@ -636,7 +710,11 @@ script:
     then:
       - switch.turn_on: buzzer
       - delay: !lambda 'return std::min(std::max(duration_ms, 20), 600);'
-      - switch.turn_off: buzzer
+      - if:
+          condition:
+            lambda: 'return id(alarm_state).state != "triggered";'
+          then:
+            - switch.turn_off: buzzer
   - id: fx_alarm_visual
     parameters:
       active: bool
