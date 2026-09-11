@@ -1,4 +1,5 @@
 .superpowers/
+docs/
 secrets.yaml
 .esphome/
 __pycache__/
