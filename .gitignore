@@ -1,5 +1,6 @@
 .superpowers/
 docs/
+AGENTS.md
 secrets.yaml
 .esphome/
 __pycache__/
