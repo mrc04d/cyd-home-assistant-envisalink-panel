@@ -31,7 +31,6 @@ substitutions:
   # ---- timing defaults (override in device shell if ever needed) ----
   grace_period_s: "10"
   pin_length: "4"
-  exit_delay_s: "30"
   arm_timeout_s: "20"
 
 esphome:
@@ -116,18 +115,10 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
-  - id: countdown_deadline
-    type: uint32_t
-    restore_value: no
-    initial_value: '0'
   - id: watchdog_active
     type: bool
     restore_value: no
     initial_value: 'false'
-  - id: last_phase
-    type: std::string
-    restore_value: no
-    initial_value: '""'
   - id: dimmed
     type: bool
     restore_value: no
@@ -154,14 +145,6 @@ text_sensor:
     ssid:
       name: "Connected SSID"
       id: wifi_ssid_info
-
-sensor:
-  - platform: homeassistant
-    entity_id: ${alarm_entity}
-    attribute: delay_before_arm
-    id: exit_delay_sensor
-    on_value:
-      - script.execute: update_status
 
 # =========================
 # RUNTIME SETTINGS (editable via web UI)
@@ -202,18 +185,6 @@ number:
     restore_value: true
     unit_of_measurement: "s"
     icon: "mdi:timer"
-    optimistic: true
-
-  - platform: template
-    id: exit_delay_s_num
-    name: "Exit Delay"
-    min_value: 0
-    max_value: 120
-    step: 1
-    initial_value: ${exit_delay_s}
-    restore_value: true
-    unit_of_measurement: "s"
-    icon: "mdi:timer-sand"
     optimistic: true
 
   - platform: template
@@ -573,10 +544,6 @@ script:
           bool show_disarm_button = false;
           bool show_cancel_button = false;
 
-          // Phase change detection for countdown deadlines
-          bool phase_changed = (state != id(last_phase));
-          id(last_phase) = state;
-
           if (state == "disarmed") {
             display_text = "READY";
             text_color = ${ok_green};
@@ -584,7 +551,6 @@ script:
             show_arm_buttons = true;
             show_disarm_button = false;
             show_cancel_button = false;
-            id(countdown_deadline) = 0;
             // Do NOT stop watchdog here - it must finish and report CHECK PANEL
             // if the arm command silently did nothing.
           }
@@ -595,7 +561,6 @@ script:
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
-            id(countdown_deadline) = 0;
             id(watchdog_active) = false;
           }
           else if (state == "armed_away") {
@@ -605,7 +570,6 @@ script:
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
-            id(countdown_deadline) = 0;
             id(watchdog_active) = false;
           }
           else if (state == "arming") {
@@ -615,12 +579,6 @@ script:
             show_arm_buttons = false;
             show_disarm_button = false;
             show_cancel_button = true;
-            uint32_t exit_delay = 0;
-            if (!isnan(id(exit_delay_sensor).state))
-              exit_delay = (uint32_t)id(exit_delay_sensor).state;
-            if (exit_delay == 0) exit_delay = (uint32_t)id(exit_delay_s_num).state;
-            if (phase_changed && exit_delay != 0)
-              id(countdown_deadline) = millis() + exit_delay * 1000UL;
             id(watchdog_active) = false;
             id(last_touch) = millis();
             id(screen_wake).execute();
@@ -635,7 +593,6 @@ script:
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
-            id(countdown_deadline) = 0;
             id(watchdog_active) = false;
             id(last_touch) = millis();
             id(screen_wake).execute();
@@ -650,7 +607,6 @@ script:
             show_arm_buttons = false;
             show_disarm_button = true;
             show_cancel_button = false;
-            id(countdown_deadline) = 0;
             id(watchdog_active) = false;
             id(last_touch) = millis();
             id(screen_wake).execute();
@@ -709,8 +665,7 @@ script:
       - lambda: 'id(watchdog_active) = true;'
       - delay: !lambda 'return (uint32_t)id(arm_timeout_s_num).state * 1000;'
       - lambda: |-
-          if (id(watchdog_active) && id(countdown_deadline) == 0
-              && id(alarm_state).state == "disarmed") {
+          if (id(watchdog_active) && id(alarm_state).state == "disarmed") {
             ESP_LOGW("watchdog", "Arm command produced no state change in %d s", (uint32_t)id(arm_timeout_s_num).state);
             lv_label_set_text(id(status_label), "CHECK PANEL");
             lv_obj_set_style_text_color(id(status_label), lv_color_hex(${error_red}), 0);
@@ -773,18 +728,6 @@ interval:
             char buf[16];
             snprintf(buf, sizeof(buf), "%02d:%02d", time.hour, time.minute);
             lv_label_set_text(id(time_label), buf);
-          }
-
-          // Phase countdown (0 deadline = disabled)
-          // Wraparound-safe: unsigned subtraction stays correct across
-          // millis() rollover (~49.7 days); cap rejects bogus huge values.
-          if (id(countdown_deadline) != 0) {
-            std::string base = "EXIT DELAY";
-            uint32_t remain = (uint32_t)(id(countdown_deadline) - millis()) / 1000UL;
-            if (remain > 3600UL) remain = 0;
-            char buf[40];
-            snprintf(buf, sizeof(buf), "%s - %us", base.c_str(), (unsigned)remain);
-            lv_label_set_text(id(status_label), buf);
           }
 
           // Triggered-state blink (both displays): toggle status colour 1Hz

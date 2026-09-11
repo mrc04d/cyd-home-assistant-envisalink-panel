@@ -7,9 +7,6 @@ substitutions:
   grace_period_ms: "10000"
   # PIN length for auto-submit (4-8)
   pin_length: "4"
-  # Exit/entry delay in seconds (0 to disable countdown)
-  exit_delay_s: "30"
-  entry_delay_s: "15"
   # Change this to your timezone - examples:
   # Etc/UTC, America/New_York, Europe/London, Asia/Tokyo
   # Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones

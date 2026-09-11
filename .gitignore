@@ -3,3 +3,9 @@ secrets.yaml
 .esphome/
 __pycache__/
 *.pyc
+
+# Device-local device shells (kept local, not published)
+cyd-2.8inch/cyd-alarm-panel-wifi-status.yaml
+guition-4inch/cyd-alarm-panel-4-inch-wifi-status.yaml
+guition-4inch/cyd-alarm-panel-4-inch-wifi-overlay.yaml
+guition-4inch/cyd-alarm-panel-4-inch-wifi-overlay-and-status.yaml

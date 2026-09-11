@@ -66,7 +66,6 @@ However, it can be easily adapted for:
 - PIN Code Entry with auto-submit at configured length
 - Grace Period Cancel (no-PIN cancel during exit delay)
 - Bounded-Polling Disarm Verification (8s bounded wait)
-- Exit/Entry Countdown Timers
 - Arm-failure Watchdog (CHECK PANEL alert)
 - Keypad Tones (2.8" buzzer)
 - Triggered-state Blink (both displays, 1Hz)
@@ -240,14 +239,12 @@ Then edit `secrets.yaml` with your values. **NEVER commit `secrets.yaml` to git.
 | `alarm_entity` | Your HA alarm entity | `alarm_control_panel.home_alarm_partition_1` |
 | `grace_period_ms` | Cancel without PIN time (0 to disable) | `10000` |
 | `pin_length` | PIN length for auto-submit (4-8) | `4` |
-| `exit_delay_s` | Exit delay in seconds (0 to disable countdown) | `30` |
-| `entry_delay_s` | Entry delay in seconds (0 to disable countdown) | `15` |
 | `arm_timeout_s` | Arm-failure watchdog timeout | `20` |
 | `timezone` | Your timezone | `Etc/UTC` |
 
 ### Tuning Notes
 
-- `arm_timeout_s` must exceed your panel's exit delay plus state propagation time, or the CHECK PANEL banner will fire during normal arming.
+- `arm_timeout_s` must exceed your alarm system's arming time plus state propagation time, or the CHECK PANEL banner will fire during normal arming.
 - `grace_period_ms: "0"` disables grace-period cancel entirely (use if your Envisalink integration doesn't support code-less disarm).
 
 ---
@@ -307,8 +304,8 @@ Static IPs are intentionally **NOT supported in the shared core**. A wrong `manu
 ## Usage
 
 ### Main Screen
-- **STAY**: Arm in home mode (starts exit delay countdown).
-- **AWAY**: Arm in away mode (starts exit delay countdown).
+- **STAY**: Arm in home mode.
+- **AWAY**: Arm in away mode.
 - **CANCEL**: During exit delay, cancels arming without PIN (within grace period).
 - **DISARM**: Opens PIN pad (when armed).
 
@@ -348,7 +345,7 @@ Some config variants add dedicated pages for the WiFi setup flow:
 After installation, verify the following:
 
 - [ ] Flash via USB once post-auth-change (OTA password invalidates old pairing assumptions).
-- [ ] Arm STAY/AWAY → countdown matches panel programming ±1s.
+- [ ] Arm STAY/AWAY → shows EXIT DELAY then the armed state; arm buttons hide.
 - [ ] CANCEL within grace window aborts with no PIN.
 - [ ] CANCEL outside window opens PIN pad.
 - [ ] Grace-cancel with HA stopped → "CANCEL FAILED" after ~6s.
@@ -472,8 +469,6 @@ substitutions:
   alarm_entity: "alarm_control_panel.home_alarm_partition_1"
   grace_period_ms: "10000"
   pin_length: "4"
-  exit_delay_s: "30"
-  entry_delay_s: "15"
   arm_timeout_s: "20"
   timezone: "Etc/UTC"
 ```
