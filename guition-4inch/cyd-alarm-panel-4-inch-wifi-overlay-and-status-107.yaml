@@ -1,13 +1,13 @@
 # =============================================================================
-# Guition ESP32-4848S040C_I - Alarm Panel for Envisalink
+# Guition ESP32-4848S040C_I - Alarm Panel 107
 # =============================================================================
 
 substitutions:
-  device_name: guition-alarm-panel
-  friendly_name: "Guition Alarm Panel"
+  device_name: "107"
+  friendly_name: "Guition Alarm Panel 107"
   alarm_entity: "alarm_control_panel.home_alarm_partition_1"
-  timezone: "Etc/UTC"
-
+  timezone: "Australia/Sydney"
+  idle_brightness: "0.15"
 packages:
   core: !include ../common/alarm-core.yaml
 
@@ -18,7 +18,7 @@ packages:
 wifi:
   # OPTIONAL STATIC IP - device-local opt-in only (never enable in core):
   # manual_ip:
-  #   static_ip: 192.168.1.70
+  #   static_ip: 192.168.1.156
   #   gateway: 192.168.1.1
   #   subnet: 255.255.255.0
   #   dns1: 192.168.1.1
@@ -41,8 +41,8 @@ esp32:
     version: recommended
     sdkconfig_options:
       CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
-      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
-      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
+      CONFIG_ESP32S3_DATA_CACHE_128KB: "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_32B: "y"
       CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
       CONFIG_SPIRAM_RODATA: "y"
 
@@ -51,6 +51,7 @@ psram:
   speed: 80MHz
 
 logger:
+  level: INFO
 
 spi:
   - id: lcd_spi
@@ -102,7 +103,7 @@ display:
     hsync_pin: GPIO16
     vsync_pin: GPIO17
     pclk_pin: GPIO21
-    pclk_frequency: 12MHz
+    pclk_frequency: 20MHz
     pclk_inverted: false
     hsync_pulse_width: 8
     hsync_front_porch: 10
@@ -126,12 +127,30 @@ touchscreen:
     id: my_touchscreen
     display: my_display
     on_touch:
-      - script.execute: screen_wake
-      - lambda: id(last_touch) = millis();
-      - light.turn_on:
-          id: backlight
-          brightness: 1.0
-          transition_length: 300ms
+      - if:
+          condition:
+            lambda: 'return id(wifi_overlay_visible);'
+          then:
+            - script.execute: toggle_wifi_overlay
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(dimmed);'
+                then:
+                  - lambda: id(last_touch) = millis();
+                  - light.turn_on:
+                      id: backlight
+                      brightness: 1.0
+                      transition_length: 300ms
+                  - delay: 200ms
+                  - script.execute: screen_wake
+                else:
+                  - script.execute: screen_wake
+                  - lambda: id(last_touch) = millis();
+                  - light.turn_on:
+                      id: backlight
+                      brightness: 1.0
+                      transition_length: 300ms
 
 lvgl:
   id: my_lvgl
@@ -188,7 +207,7 @@ lvgl:
         - label:
             align: CENTER
             y: 36
-            text: "2. Password: configme123"
+            text: "2. Password: see secrets.yaml"
             text_color: ${text_dim}
             text_font: montserrat_22
 
@@ -210,6 +229,63 @@ lvgl:
             align: BOTTOM_MID
             y: -30
             text: "Waiting for connection..."
+            text_color: ${button_grey}
+            text_font: montserrat_22
+
+    - id: wifi_connecting_page
+      bg_color: ${bg_dark}
+      widgets:
+        - obj:
+            align: TOP_MID
+            width: 480
+            height: 80
+            bg_color: ${card_bg}
+            radius: 0
+            border_width: 0
+
+        - label:
+            align: TOP_MID
+            y: 25
+            text: "Connecting to WiFi..."
+            text_color: 0x227EE6
+            text_font: montserrat_36
+
+        - obj:
+            align: CENTER
+            y: 20
+            width: 450
+            height: 180
+            bg_color: ${card_bg}
+            radius: 18
+            border_width: 3
+            border_color: 0x227EE6
+
+        - label:
+            align: CENTER
+            y: -20
+            text: "Network:"
+            text_color: ${text_dim}
+            text_font: montserrat_22
+
+        - label:
+            id: wifi_connecting_ssid_label
+            align: CENTER
+            y: 20
+            text: "Connecting..."
+            text_color: ${ok_green}
+            text_font: montserrat_28
+
+        - label:
+            align: CENTER
+            y: 70
+            text: "Please wait..."
+            text_color: ${text_dim}
+            text_font: montserrat_22
+
+        - label:
+            align: BOTTOM_MID
+            y: -30
+            text: "Attempting connection"
             text_color: ${button_grey}
             text_font: montserrat_22
 
@@ -255,6 +331,13 @@ lvgl:
             bg_color: ${button_grey}
             border_width: 0
 
+
+            on_press:
+              - if:
+                  condition:
+                    lambda: 'return !id(wifi_overlay_visible);'
+                  then:
+                    - script.execute: toggle_wifi_overlay
         - obj:
             id: wifi_bar2
             align: TOP_RIGHT
@@ -266,6 +349,13 @@ lvgl:
             bg_color: ${button_grey}
             border_width: 0
 
+
+            on_press:
+              - if:
+                  condition:
+                    lambda: 'return !id(wifi_overlay_visible);'
+                  then:
+                    - script.execute: toggle_wifi_overlay
         - obj:
             id: wifi_bar3
             align: TOP_RIGHT
@@ -277,6 +367,13 @@ lvgl:
             bg_color: ${button_grey}
             border_width: 0
 
+
+            on_press:
+              - if:
+                  condition:
+                    lambda: 'return !id(wifi_overlay_visible);'
+                  then:
+                    - script.execute: toggle_wifi_overlay
         - obj:
             id: wifi_bar4
             align: TOP_RIGHT
@@ -288,6 +385,13 @@ lvgl:
             bg_color: ${button_grey}
             border_width: 0
 
+
+            on_press:
+              - if:
+                  condition:
+                    lambda: 'return !id(wifi_overlay_visible);'
+                  then:
+                    - script.execute: toggle_wifi_overlay
         - obj:
             id: status_card
             align: CENTER
@@ -702,3 +806,4 @@ script:
       - logger.log:
           format: "fx_alarm_visual(%d)"
           args: ['active']
+
