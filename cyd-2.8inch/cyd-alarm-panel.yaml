@@ -1,6 +1,6 @@
 substitutions:
-  device_name: cyd-alarm
-  friendly_name: "CYD Alarm Panel"
+  device_name: "107"
+  friendly_name: "CYD Alarm Panel 107"
   # Change this to your alarm entity ID
   alarm_entity: "alarm_control_panel.home_alarm_partition_1"
   # Grace period in milliseconds (10 seconds = 10000)
