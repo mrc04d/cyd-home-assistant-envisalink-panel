@@ -1,10 +1,10 @@
 # =============================================================================
-# Guition ESP32-4848S040C_I - Alarm Panel 107
+# Guition ESP32-4848S040C_I - Alarm Panel 156
 # =============================================================================
 
 substitutions:
-  device_name: "107"
-  friendly_name: "Garage Alarm Panel"
+  device_name: "156"
+  friendly_name: "Upstairs Alarm Panel"
   alarm_entity: "alarm_control_panel.home_alarm_partition_1"
   timezone: "Australia/Sydney"
   idle_brightness: "0.15"
@@ -18,7 +18,7 @@ packages:
 wifi:
   # OPTIONAL STATIC IP - device-local opt-in only (never enable in core):
   # manual_ip:
-  #   static_ip: 192.168.1.107
+  #   static_ip: 192.168.1.156
   #   gateway: 192.168.1.1
   #   subnet: 255.255.255.0
   #   dns1: 192.168.1.1
